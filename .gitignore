@@ -1,0 +1,81 @@
+# Documentation is maintained locally and is not committed.
+*.md
+
+# Environment variables and provider credentials
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+
+# Node.js / Next.js
+node_modules/
+.next/
+out/
+dist/
+.turbo/
+.vercel/
+.npm/
+.pnpm-store/
+.yarn/cache/
+.yarn/install-state.gz
+*.tsbuildinfo
+next-env.d.ts
+
+# Java / Spring / Gradle / Maven
+.gradle/
+build/
+target/
+bin/
+*.class
+hs_err_pid*
+
+# Test and analysis output
+coverage/
+.nyc_output/
+test-results/
+playwright-report/
+allure-results/
+.scannerwork/
+
+# Runtime logs and temporary files
+logs/
+*.log
+*.pid
+*.seed
+*.tmp
+tmp/
+temp/
+.cache/
+
+# Raw transit observations may contain restricted provider data.
+# Sanitized, redistributable fixtures under tests/fixtures remain trackable.
+data/raw/
+data/observations/
+observations/
+captures/
+
+# Local databases and cache snapshots
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+*.rdb
+
+# IDE and editor state
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+*~
+
+# Operating system metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/

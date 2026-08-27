@@ -1,0 +1,41 @@
+spring:
+  application:
+    name: realtime-transit-backend
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/realtime_transit}
+    username: ${DB_USERNAME:transit}
+    password: ${DB_PASSWORD:transit}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+
+server:
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+
+transit:
+  providers:
+    gbis:
+      base-url: https://apis.data.go.kr
+      service-key: ${GBIS_SERVICE_KEY:}
+    national-precision-bus:
+      base-url: ${NATIONAL_PRECISION_BUS_BASE_URL:}
+      service-key: ${NATIONAL_PRECISION_BUS_SERVICE_KEY:}
