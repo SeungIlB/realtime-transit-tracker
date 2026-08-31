@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.realtimetransit.backend.provider.repository.RawObservationMapper">
+    <resultMap id="rawObservationMap" type="RawObservationEntity">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long" />
+            <arg column="provider_id" javaType="java.lang.Long" />
+            <arg column="endpoint" javaType="java.lang.String" />
+            <arg column="request_key" javaType="java.lang.String" />
+            <arg column="received_at" javaType="java.time.Instant" />
+            <arg column="provider_observed_at" javaType="java.time.Instant" />
+            <arg column="response_status" javaType="java.lang.Integer" />
+            <arg column="payload" javaType="java.lang.String" />
+            <arg column="expires_at" javaType="java.time.Instant" />
+        </constructor>
+    </resultMap>
+
+    <resultMap id="providerCollectionStatusMap" type="ProviderCollectionStatusEntity">
+        <constructor>
+            <idArg column="providerId" javaType="java.lang.Long" />
+            <arg column="providerCode" javaType="java.lang.String" />
+            <arg column="endpoint" javaType="java.lang.String" />
+            <arg column="totalCalls" javaType="java.lang.Long" />
+            <arg column="successfulCalls" javaType="java.lang.Long" />
+            <arg column="failedCalls" javaType="java.lang.Long" />
+            <arg column="latestReceivedAt" javaType="java.time.Instant" />
+        </constructor>
+    </resultMap>
+
+    <sql id="rawObservationColumns">
+        id, provider_id, endpoint, request_key, received_at,
+        provider_observed_at, response_status, payload, expires_at
+    </sql>
+
+    <select id="insertRawObservation"
+            resultType="long"
+            affectData="true"
+            flushCache="true">
+        INSERT INTO raw_observation (
+        provider_id, endpoint, request_key, received_at, provider_observed_at, response_status, payload, expires_at
+        ) VALUES(
+        #{providerId}, #{endpoint}, #{requestKey}, #{receivedAt}, #{providerObservedAt}, #{responseStatus}, CAST(#{payload} AS JSONB), #{expiresAt}
+        ) RETURNING id
+    </select>
+
+    <delete id="deleteExpiredRawObservations">
+        DELETE FROM raw_observation
+        WHERE id IN (
+        SELECT id
+        FROM raw_observation
+        WHERE expires_at IS NOT NULL
+        AND expires_at <![CDATA[ <= ]]> #{expiresAtOrBefore}
+        ORDER BY expires_at ASC, id ASC
+        LIMIT #{limit}
+        )
+    </delete>
+
+    <select id="findLatestByProviderIdAndEndpointAndRequestKey"
+            resultMap="rawObservationMap">
+        SELECT <include refid="rawObservationColumns" />
+        FROM raw_observation
+        WHERE provider_id = #{providerId}
+        AND endpoint = #{endpoint}
+        AND request_key = #{requestKey}
+        ORDER By received_at DESC, id DESC
+        LIMIT 1
+    </select>
+
+    <select id="findLatestSuccessfulUnexpiredByRequestIdentity"
+            resultMap="rawObservationMap">
+        SELECT <include refid="rawObservationColumns" />
+        FROM raw_observation
+        WHERE provider_id = #{providerId}
+        AND endpoint = #{endpoint}
+        AND request_key = #{requestKey}
+        AND response_status <![CDATA[ >= ]]> 200
+        AND response_status <![CDATA[ < ]]> 300
+        AND payload IS NOT NULL
+        AND expires_at <![CDATA[ > ]]> #{asOf}
+        ORDER BY received_at DESC, id DESC
+        LIMIT 1
+    </select>
+
+    <select id="findCollectionStatusesReceivedAfter"
+            resultMap="providerCollectionStatusMap">
+        SELECT tp.id AS "providerId",
+            tp.code AS "providerCode",
+            ro.endpoint AS "endpoint",
+            count(*) AS "totalCalls",
+            count(*) FILTER (WHERE response_status <![CDATA[ >= ]]> 200 AND response_status <![CDATA[ < ]]> 300) AS "successfulCalls",
+            count(*) FILTER (WHERE response_status <![CDATA[ < ]]> 200 OR response_status <![CDATA[ >= ]]> 300) AS "failedCalls",
+            MAX(ro.received_at) AS "latestReceivedAt"
+        FROM transit_provider tp
+        INNER JOIN raw_observation ro
+            ON ro.provider_id = tp.id
+        WHERE ro.received_at <![CDATA[ >= ]]> #{receivedAfter}
+        GROUP BY tp.id, tp.code, ro.endpoint
+        ORDER BY "providerId" ASC, "endpoint" ASC
+    </select>
+</mapper>
