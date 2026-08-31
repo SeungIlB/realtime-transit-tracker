@@ -1,4 +1,4 @@
-package com.realtimetransit.backend.api;
+package com.realtimetransit.backend.system.controller;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;

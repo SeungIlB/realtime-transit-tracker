@@ -1,4 +1,6 @@
-package com.realtimetransit.backend.api;
+package com.realtimetransit.backend.system.controller;
+
+import com.realtimetransit.backend.system.dto.response.SystemHealthResponse;
 
 import java.time.Clock;
 import java.time.Instant;

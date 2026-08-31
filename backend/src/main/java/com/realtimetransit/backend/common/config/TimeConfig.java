@@ -1,4 +1,4 @@
-package com.realtimetransit.backend.config;
+package com.realtimetransit.backend.common.config;
 
 import java.time.Clock;
 

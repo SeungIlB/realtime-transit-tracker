@@ -1,4 +1,4 @@
-package com.realtimetransit.backend.api;
+package com.realtimetransit.backend.system.dto.response;
 
 import java.time.Instant;
 
