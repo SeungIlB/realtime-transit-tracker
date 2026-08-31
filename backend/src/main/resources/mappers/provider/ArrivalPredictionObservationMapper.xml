@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.realtimetransit.backend.provider.repository.ArrivalPredictionObservationMapper">
+    <resultMap id="arrivalPredictionObservationMap" type="ArrivalPredictionObservationEntity">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long" />
+            <arg column="raw_observation_id" javaType="java.lang.Long" />
+            <arg column="vehicle_run_observation_id" javaType="java.lang.Long" />
+            <arg column="boarding_stop_id" javaType="java.util.UUID" />
+            <arg column="expected_at" javaType="java.time.Instant" />
+            <arg column="min_expected_at" javaType="java.time.Instant" />
+            <arg column="max_expected_at" javaType="java.time.Instant" />
+            <arg column="remaining_stops" javaType="java.lang.Integer" />
+            <arg column="source" javaType="java.lang.String" />
+            <arg column="confidence" javaType="java.lang.String" />
+            <arg column="observed_at" javaType="java.time.Instant" />
+            <arg column="received_at" javaType="java.time.Instant" />
+        </constructor>
+    </resultMap>
+
+    <sql id="arrivalPredictionObservationColumns">
+        id, raw_observation_id, vehicle_run_observation_id, boarding_stop_id,
+        expected_at, min_expected_at, max_expected_at, remaining_stops,
+        source, confidence, observed_at, received_at
+    </sql>
+
+    <select id="insertArrivalPredictionObservation"
+            resultType="long"
+            affectData="true"
+            flushCache="true">
+        INSERT INTO arrival_prediction_observation (
+        raw_observation_id, vehicle_run_observation_id, boarding_stop_id, expected_at, min_expected_at, max_expected_at,
+        remaining_stops, source, confidence, observed_at, received_at
+        ) VALUES (
+        #{rawObservationId}, #{vehicleRunObservationId}, #{boardingStopId}, #{expectedAt}, #{minExpectedAt}, #{maxExpectedAt},
+        #{remainingStops}, #{source}, #{confidence}, #{observedAt}, #{receivedAt}
+        ) RETURNING id
+    </select>
+
+    <delete id="deleteArrivalPredictionsReceivedBefore">
+        DELETE FROM arrival_prediction_observation
+        WHERE id IN (
+            SELECT id
+            FROM arrival_prediction_observation
+            WHERE received_at <![CDATA[ < ]]> #{receivedBefore}
+            ORDER BY received_at ASC, id ASC
+            LIMIT #{limit}
+        )
+    </delete>
+</mapper>

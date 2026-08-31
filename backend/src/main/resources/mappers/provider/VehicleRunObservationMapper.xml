@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.realtimetransit.backend.provider.repository.VehicleRunObservationMapper">
+    <resultMap id="vehicleRunObservationMap" type="VehicleRunObservationEntity">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long" />
+            <arg column="raw_observation_id" javaType="java.lang.Long" />
+            <arg column="line_id" javaType="java.util.UUID" />
+            <arg column="direction_id" javaType="java.util.UUID" />
+            <arg column="stop_pattern_id" javaType="java.util.UUID" />
+            <arg column="provider_vehicle_id" javaType="java.lang.String" />
+            <arg column="provider_run_id" javaType="java.lang.String" />
+            <arg column="destination_stop_id" javaType="java.util.UUID" />
+            <arg column="current_stop_id" javaType="java.util.UUID" />
+            <arg column="current_sequence" javaType="java.lang.Integer" />
+            <arg column="service_type" javaType="java.lang.String" />
+            <arg column="movement_status" javaType="java.lang.String" />
+            <arg column="latitude" javaType="java.math.BigDecimal" />
+            <arg column="longitude" javaType="java.math.BigDecimal" />
+            <arg column="speed_kph" javaType="java.math.BigDecimal" />
+            <arg column="bearing_degrees" javaType="java.math.BigDecimal" />
+            <arg column="position_source" javaType="java.lang.String" />
+            <arg column="observed_at" javaType="java.time.Instant" />
+            <arg column="received_at" javaType="java.time.Instant" />
+        </constructor>
+    </resultMap>
+
+    <sql id="vehicleRunObservationColumns">
+        id, raw_observation_id, line_id, direction_id, stop_pattern_id,
+        provider_vehicle_id, provider_run_id, destination_stop_id, current_stop_id,
+        current_sequence, service_type, movement_status, latitude, longitude,
+        speed_kph, bearing_degrees, position_source, observed_at, received_at
+    </sql>
+
+    <select id="insertVehicleRunObservation"
+            resultType="long"
+            affectData="true"
+            flushCache="true">
+        INSERT INTO vehicle_run_observation(
+        raw_observation_id, line_id, direction_id, stop_pattern_id, provider_vehicle_id, provider_run_id, destination_stop_id,
+        current_stop_id, current_sequence, service_type, movement_status, latitude, longitude, speed_kph, bearing_degrees,
+        position_source, observed_at, received_at
+        ) VALUES (
+        #{rawObservationId}, #{lineId}, #{directionId}, #{stopPatternId}, #{providerVehicleId}, #{providerRunId}, #{destinationStopId},
+        #{currentStopId}, #{currentSequence}, #{serviceType}, #{movementStatus}, #{latitude}, #{longitude}, #{speedKph}, #{bearingDegrees},
+        #{positionSource}, #{observedAt}, #{receivedAt}
+        ) RETURNING id
+    </select>
+
+    <delete id="deleteVehicleRunObservationsReceivedBefore">
+        DELETE FROM vehicle_run_observation
+        WHERE id IN (
+        SELECT id
+        FROM vehicle_run_observation
+        WHERE received_at <![CDATA[ < ]]> #{receivedBefore}
+        ORDER BY received_at ASC, id ASC
+        LIMIT #{limit}
+        )
+    </delete>
+
+    <select id="findRecentVehicleRunObservations"
+            resultMap="vehicleRunObservationMap">
+        SELECT <include refid="vehicleRunObservationColumns" />
+        FROM vehicle_run_observation
+        WHERE line_id = #{lineId}
+        AND provider_vehicle_id = #{providerVehicleId}
+        AND observed_at <![CDATA[ >= ]]> #{observedAfter}
+        ORDER BY observed_at DESC, received_at DESC, id DESC
+        LIMIT #{limit}
+    </select>
+</mapper>

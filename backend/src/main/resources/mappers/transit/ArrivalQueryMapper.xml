@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.realtimetransit.backend.transit.repository.ArrivalQueryMapper">
+    <resultMap id="upcomingArrivalMap" type="UpcomingArrivalEntity">
+        <constructor>
+            <idArg column="arrivalPredictionId" javaType="java.lang.Long" />
+            <arg column="vehicleRunObservationId" javaType="java.lang.Long" />
+            <arg column="providerVehicleId" javaType="java.lang.String" />
+            <arg column="lineId" javaType="java.util.UUID" />
+            <arg column="boardingStopId" javaType="java.util.UUID" />
+            <arg column="expectedAt" javaType="java.time.Instant" />
+            <arg column="minExpectedAt" javaType="java.time.Instant" />
+            <arg column="maxExpectedAt" javaType="java.time.Instant" />
+            <arg column="remainingStops" javaType="java.lang.Integer" />
+            <arg column="source" javaType="java.lang.String" />
+            <arg column="confidence" javaType="java.lang.String" />
+            <arg column="movementStatus" javaType="java.lang.String" />
+            <arg column="currentStopId" javaType="java.util.UUID" />
+            <arg column="currentSequence" javaType="java.lang.Integer" />
+            <arg column="observedAt" javaType="java.time.Instant" />
+            <arg column="receivedAt" javaType="java.time.Instant" />
+        </constructor>
+    </resultMap>
+
+    <select id="findUpcomingArrivalsByLineIdAndBoardingStopIdAndAlightingStopId"
+            resultMap="upcomingArrivalMap">
+        WITH ranked_arrivals AS (
+            SELECT
+                apo.id AS "arrivalPredictionId",
+                vro.id AS "vehicleRunObservationId",
+                vro.provider_vehicle_id AS "providerVehicleId",
+                vro.line_id AS "lineId",
+                apo.boarding_stop_id AS "boardingStopId",
+                apo.expected_at AS "expectedAt",
+                apo.min_expected_at AS "minExpectedAt",
+                apo.max_expected_at AS "maxExpectedAt",
+                apo.remaining_stops AS "remainingStops",
+                apo.source AS "source",
+                apo.confidence AS "confidence",
+                vro.movement_status AS "movementStatus",
+                vro.current_stop_id AS "currentStopId",
+                vro.current_sequence AS "currentSequence",
+                apo.observed_at AS "observedAt",
+                apo.received_at AS "receivedAt",
+                ROW_NUMBER() OVER (
+                    PARTITION BY vro.provider_vehicle_id
+                    ORDER BY apo.observed_at DESC,
+                             apo.received_at DESC,
+                             apo.id DESC
+                ) AS "rowNumber"
+            FROM arrival_prediction_observation apo
+            INNER JOIN vehicle_run_observation vro
+                    ON vro.id = apo.vehicle_run_observation_id
+            INNER JOIN stop_pattern_stop boarding_sps
+                    ON boarding_sps.stop_pattern_id = vro.stop_pattern_id
+                   AND boarding_sps.stop_id = apo.boarding_stop_id
+                   AND boarding_sps.pickup_allowed = TRUE
+            INNER JOIN stop_pattern_stop alighting_sps
+                    ON alighting_sps.stop_pattern_id = vro.stop_pattern_id
+                   AND alighting_sps.stop_id = #{alightingStopId}
+                   AND alighting_sps.dropoff_allowed = TRUE
+                   AND alighting_sps.stop_sequence <![CDATA[ > ]]> boarding_sps.stop_sequence
+            WHERE vro.line_id = #{lineId}
+              AND apo.boarding_stop_id = #{boardingStopId}
+              AND apo.expected_at <![CDATA[ >= ]]> #{asOf}
+              AND apo.observed_at <![CDATA[ >= ]]> #{observedAfter}
+        )
+        SELECT
+            "arrivalPredictionId",
+            "vehicleRunObservationId",
+            "providerVehicleId",
+            "lineId",
+            "boardingStopId",
+            "expectedAt",
+            "minExpectedAt",
+            "maxExpectedAt",
+            "remainingStops",
+            "source",
+            "confidence",
+            "movementStatus",
+            "currentStopId",
+            "currentSequence",
+            "observedAt",
+            "receivedAt"
+        FROM ranked_arrivals
+        WHERE "rowNumber" = 1
+        ORDER BY "expectedAt" ASC,
+                 "providerVehicleId" ASC
+        LIMIT #{limit}
+    </select>
+</mapper>
