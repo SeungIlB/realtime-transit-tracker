@@ -1,0 +1,5 @@
+logging:
+  level:
+    com.realtimetransit.backend.transit.repository: DEBUG
+    com.realtimetransit.backend.provider.repository: DEBUG
+    com.realtimetransit.backend.arrival.repository: DEBUG

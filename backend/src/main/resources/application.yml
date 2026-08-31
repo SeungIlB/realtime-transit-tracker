@@ -1,20 +1,38 @@
 spring:
   application:
     name: realtime-transit-backend
+  profiles:
+    default: local
+  config:
+    import:
+      - optional:file:../.env[.properties]
+      - optional:file:.env[.properties]
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/realtime_transit}
     username: ${DB_USERNAME:transit}
     password: ${DB_PASSWORD:transit}
-  jpa:
-    open-in-view: false
-    hibernate:
-      ddl-auto: validate
-    properties:
-      hibernate:
-        jdbc:
-          time_zone: UTC
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:transit}
+      timeout: 2s
+      connect-timeout: 2s
+  cache:
+    type: redis
   flyway:
     enabled: true
+
+mybatis:
+  mapper-locations: classpath:/mappers/**/*.xml
+  type-aliases-package: com.realtimetransit.backend.transit.entity,com.realtimetransit.backend.provider.entity
+  type-handlers-package: com.realtimetransit.backend.common.mybatis
+  configuration:
+    map-underscore-to-camel-case: true
+    use-column-label: true
+    jdbc-type-for-null: 'NULL'
+    default-statement-timeout: 10
+    shrink-whitespaces-in-sql: true
 
 server:
   port: ${SERVER_PORT:8080}
@@ -32,6 +50,10 @@ management:
       show-details: never
 
 transit:
+  api-quota:
+    seoul-subway-daily-limit: ${SEOUL_SUBWAY_DAILY_CALL_BUDGET:800}
+    gbis-daily-limit: ${GBIS_DAILY_CALL_BUDGET:800}
+    national-precision-bus-daily-limit: ${NATIONAL_PRECISION_BUS_DAILY_CALL_BUDGET:4000}
   providers:
     gbis:
       base-url: https://apis.data.go.kr
@@ -39,3 +61,6 @@ transit:
     national-precision-bus:
       base-url: ${NATIONAL_PRECISION_BUS_BASE_URL:}
       service-key: ${NATIONAL_PRECISION_BUS_SERVICE_KEY:}
+    seoul-subway:
+      base-url: ${SEOUL_SUBWAY_BASE_URL:http://swopenAPI.seoul.go.kr/api/subway}
+      service-key: ${SEOUL_SUBWAY_SERVICE_KEY:}
