@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.realtimetransit.backend.transit.repository.RouteDirectionMapper">
+    <resultMap id="routeDirectionMap" type="RouteDirectionEntity">
+        <constructor>
+            <idArg column="id" javaType="java.util.UUID"
+                   typeHandler="org.apache.ibatis.type.ObjectTypeHandler" />
+            <arg column="line_id" javaType="java.util.UUID"
+                 typeHandler="org.apache.ibatis.type.ObjectTypeHandler" />
+            <arg column="provider_direction_id" javaType="java.lang.String" />
+            <arg column="origin_stop_id" javaType="java.util.UUID"
+                 typeHandler="org.apache.ibatis.type.ObjectTypeHandler" />
+            <arg column="terminal_stop_id" javaType="java.util.UUID"
+                 typeHandler="org.apache.ibatis.type.ObjectTypeHandler" />
+            <arg column="representative_next_stop_id" javaType="java.util.UUID"
+                 typeHandler="org.apache.ibatis.type.ObjectTypeHandler" />
+            <arg column="display_name" javaType="java.lang.String" />
+            <arg column="active" javaType="java.lang.Boolean" />
+            <arg column="created_at" javaType="java.time.Instant" />
+            <arg column="updated_at" javaType="java.time.Instant" />
+        </constructor>
+    </resultMap>
+
+    <sql id="routeDirectionColumns">
+        id, line_id, provider_direction_id, origin_stop_id, terminal_stop_id,
+        representative_next_stop_id, display_name, active, created_at, updated_at
+    </sql>
+
+    <insert id="upsertRouteDirection">
+        INSERT INTO route_direction (
+            id, line_id, provider_direction_id, origin_stop_id, terminal_stop_id,
+            representative_next_stop_id, display_name, active, created_at, updated_at
+        ) VALUES (
+            #{id}, #{lineId}, #{providerDirectionId}, #{originStopId}, #{terminalStopId},
+            #{representativeNextStopId}, #{displayName}, #{active}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+        )
+        ON CONFLICT (line_id, provider_direction_id)
+        DO UPDATE SET
+            origin_stop_id = EXCLUDED.origin_stop_id,
+            terminal_stop_id = EXCLUDED.terminal_stop_id,
+            representative_next_stop_id = EXCLUDED.representative_next_stop_id,
+            display_name = EXCLUDED.display_name,
+            active = EXCLUDED.active,
+            updated_at = CURRENT_TIMESTAMP
+    </insert>
+
+    <select id="findRouteDirectionByBusinessKey"
+            resultMap="routeDirectionMap">
+        SELECT <include refid="routeDirectionColumns" />
+        FROM route_direction
+        WHERE line_id = #{lineId}
+        AND provider_direction_id = #{providerDirectionId}
+    </select>
+
+    <update id="deactivateRouteDirectionsNotInProviderIds">
+        UPDATE route_direction
+        SET active = FALSE,
+        updated_at = CURRENT_TIMESTAMP
+        WHERE line_id = #{lineId}
+        AND active = TRUE
+
+        <if test="retainedProviderDirectionIds != null
+                and !retainedProviderDirectionIds.isEmpty()">
+            AND provider_direction_id NOT IN
+
+            <foreach collection="retainedProviderDirectionIds"
+                     item="providerDirectionId"
+                     open="("
+                     separator=","
+                     close=")">
+                #{providerDirectionId}
+            </foreach>
+        </if>
+    </update>
+</mapper>

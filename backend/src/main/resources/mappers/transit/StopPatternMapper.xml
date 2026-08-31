@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.realtimetransit.backend.transit.repository.StopPatternMapper">
+    <resultMap id="stopPatternMap" type="StopPatternEntity">
+        <constructor>
+            <idArg column="id" javaType="java.util.UUID"
+                   typeHandler="org.apache.ibatis.type.ObjectTypeHandler" />
+            <arg column="line_id" javaType="java.util.UUID"
+                 typeHandler="org.apache.ibatis.type.ObjectTypeHandler" />
+            <arg column="provider_pattern_id" javaType="java.lang.String" />
+            <arg column="service_type" javaType="java.lang.String" />
+            <arg column="valid_from" javaType="java.time.LocalDate" />
+            <arg column="valid_to" javaType="java.time.LocalDate" />
+            <arg column="active" javaType="java.lang.Boolean" />
+            <arg column="created_at" javaType="java.time.Instant" />
+            <arg column="updated_at" javaType="java.time.Instant" />
+        </constructor>
+    </resultMap>
+
+    <resultMap id="stopPatternStopMap" type="StopPatternStopEntity">
+        <constructor>
+            <idArg column="stop_pattern_id" javaType="java.util.UUID"
+                   typeHandler="org.apache.ibatis.type.ObjectTypeHandler" />
+            <idArg column="stop_sequence" javaType="java.lang.Integer" />
+            <arg column="stop_id" javaType="java.util.UUID"
+                 typeHandler="org.apache.ibatis.type.ObjectTypeHandler" />
+            <arg column="pickup_allowed" javaType="java.lang.Boolean" />
+            <arg column="dropoff_allowed" javaType="java.lang.Boolean" />
+        </constructor>
+    </resultMap>
+
+    <resultMap id="stopPatternStopDetailMap" type="StopPatternStopDetailEntity">
+        <constructor>
+            <idArg column="stopPatternId" javaType="java.util.UUID" />
+            <idArg column="stopSequence" javaType="java.lang.Integer" />
+            <arg column="stopId" javaType="java.util.UUID" />
+            <arg column="stopName" javaType="java.lang.String" />
+            <arg column="pickupAllowed" javaType="java.lang.Boolean" />
+            <arg column="dropoffAllowed" javaType="java.lang.Boolean" />
+        </constructor>
+    </resultMap>
+
+    <sql id="stopPatternColumns">
+        id, line_id, provider_pattern_id, service_type, valid_from,
+        valid_to, active, created_at, updated_at
+    </sql>
+
+    <select id="findActiveStopPatternsByLineIdAndServiceDate" resultMap="stopPatternMap">
+        SELECT <include refid="stopPatternColumns" />
+        FROM stop_pattern
+        WHERE line_id = #{lineId}
+          AND active = TRUE
+          AND valid_from <![CDATA[ <= ]]> #{serviceDate}
+          AND (
+              valid_to IS NULL
+              OR valid_to <![CDATA[ >= ]]> #{serviceDate}
+          )
+        ORDER BY service_type ASC,
+                 valid_from DESC,
+                 provider_pattern_id ASC
+    </select>
+
+    <insert id="upsertStopPattern">
+        INSERT INTO stop_pattern (
+            id,
+            line_id,
+            provider_pattern_id,
+            service_type,
+            valid_from,
+            valid_to,
+            active
+        )
+        VALUES (
+            #{id},
+            #{lineId},
+            #{providerPatternId},
+            #{serviceType},
+            #{validFrom},
+            #{validTo},
+            #{active}
+        )
+        ON CONFLICT (line_id, provider_pattern_id, valid_from)
+        DO UPDATE SET
+            service_type = EXCLUDED.service_type,
+            valid_to = EXCLUDED.valid_to,
+            active = EXCLUDED.active,
+            updated_at = CURRENT_TIMESTAMP
+    </insert>
+
+    <insert id="upsertStopPatternStops">
+        INSERT INTO stop_pattern_stop (
+        stop_pattern_id,
+        stop_sequence,
+        stop_id,
+        pickup_allowed,
+        dropoff_allowed
+        )
+        VALUES
+        <foreach collection="patternStops"
+                 item="patternStop"
+                 separator=",">
+            (
+            #{patternStop.stopPatternId},
+            #{patternStop.stopSequence},
+            #{patternStop.stopId},
+            #{patternStop.pickupAllowed},
+            #{patternStop.dropoffAllowed}
+            )
+        </foreach>
+        ON CONFLICT (stop_pattern_id, stop_sequence)
+        DO UPDATE SET
+        stop_id = EXCLUDED.stop_id,
+        pickup_allowed = EXCLUDED.pickup_allowed,
+        dropoff_allowed = EXCLUDED.dropoff_allowed
+    </insert>
+
+    <select id="findStopsByStopPatternId"
+            resultMap="stopPatternStopDetailMap">
+        SELECT
+        sps.stop_pattern_id AS "stopPatternId",
+        sps.stop_sequence AS "stopSequence",
+        sps.stop_id AS "stopId",
+        ts.public_name AS "stopName",
+        sps.pickup_allowed AS "pickupAllowed",
+        sps.dropoff_allowed AS "dropoffAllowed"
+        FROM stop_pattern_stop sps
+        INNER JOIN  transit_stop ts
+        ON  ts.id = sps.stop_id
+        WHERE  sps.stop_pattern_id = #{stopPatternId}
+        ORDER BY  sps.stop_sequence ASC
+    </select>
+
+    <select id="findStopPatternByBusinessKey"
+            resultMap="stopPatternMap">
+        SELECT  <include refid="stopPatternColumns" />
+        FROM stop_pattern
+        WHERE line_id = #{lineId}
+        AND provider_pattern_id = #{providerPatternId}
+        AND valid_from = #{validFrom}
+    </select>
+
+    <delete id="deleteStopPatternStopsNotInSequences">
+        DELETE FROM stop_pattern_stop
+        WHERE stop_pattern_id = #{stopPatternId}
+        <if test="retainedStopSequences != null and !retainedStopSequences.isEmpty()">
+            AND stop_sequence NOT IN
+            <foreach collection="retainedStopSequences"
+                     item="stopSequence"
+                     open="("
+                     separator=","
+                     close=")"> #{stopSequence}
+            </foreach>
+        </if>
+    </delete>
+
+    <update id="deactivateStopPatternsNotInBusinessKeys">
+        UPDATE stop_pattern
+        SET active = FALSE,
+        updated_at = CURRENT_TIMESTAMP
+        WHERE line_id = #{lineId}
+        AND active = TRUE
+        <if test="retainedPatterns != null
+            and !retainedPatterns.isEmpty()">
+            AND (provider_pattern_id, valid_from) NOT IN
+
+            <foreach collection="retainedPatterns"
+                     item="retainedPattern"
+                     open="("
+                     separator=","
+                     close=")">
+                (
+                #{retainedPattern.providerPatternId},
+                #{retainedPattern.validFrom}
+                )
+            </foreach>
+        </if>
+    </update>
+</mapper>

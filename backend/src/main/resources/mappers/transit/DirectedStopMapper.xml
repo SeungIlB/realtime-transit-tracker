@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.realtimetransit.backend.transit.repository.DirectedStopMapper">
+    <resultMap id="directedStopAssignmentMap" type="DirectedStopAssignmentEntity">
+        <constructor>
+            <idArg column="id" javaType="java.util.UUID"
+                   typeHandler="org.apache.ibatis.type.ObjectTypeHandler" />
+            <arg column="line_id" javaType="java.util.UUID"
+                 typeHandler="org.apache.ibatis.type.ObjectTypeHandler" />
+            <arg column="direction_id" javaType="java.util.UUID"
+                 typeHandler="org.apache.ibatis.type.ObjectTypeHandler" />
+            <arg column="stop_id" javaType="java.util.UUID"
+                 typeHandler="org.apache.ibatis.type.ObjectTypeHandler" />
+            <arg column="stop_sequence" javaType="java.lang.Integer" />
+            <arg column="next_stop_id" javaType="java.util.UUID"
+                 typeHandler="org.apache.ibatis.type.ObjectTypeHandler" />
+            <arg column="platform_id" javaType="java.lang.String" />
+            <arg column="display_direction" javaType="java.lang.String" />
+            <arg column="segment_id" javaType="java.lang.String" />
+        </constructor>
+    </resultMap>
+
+    <insert id="upsertDirectedStop">
+        INSERT INTO directed_stop (
+        id, line_id, direction_id, stop_id, stop_sequence, next_stop_id, platform_id, display_direction, segment_id
+        )
+        VALUES (
+        #{id}, #{lineId}, #{directionId}, #{stopId}, #{stopSequence}, #{nextStopId}, #{platformId}, #{displayDirection},
+        #{segmentId}
+        ) ON CONFLICT (direction_id, stop_sequence)
+        DO UPDATE SET
+        line_id = EXCLUDED.line_id,
+        stop_id = EXCLUDED.stop_id,
+        next_stop_id = EXCLUDED.next_stop_id,
+        platform_id = EXCLUDED.platform_id,
+        display_direction = EXCLUDED.display_direction,
+        segment_id = EXCLUDED.segment_id
+    </insert>
+
+    <delete id="deleteDirectedStopsNotInSequences">
+        DELETE FROM directed_stop
+        WHERE direction_id = #{directionId}
+        <if test="retainedStopSequences != null
+                and !retainedStopSequences.isEmpty()">
+            AND stop_sequence NOT IN
+            <foreach collection="retainedStopSequences"
+                     item="stopSequence"
+                     open="("
+                     separator=","
+                     close=")">
+                #{stopSequence}
+            </foreach>
+        </if>
+    </delete>
+</mapper>

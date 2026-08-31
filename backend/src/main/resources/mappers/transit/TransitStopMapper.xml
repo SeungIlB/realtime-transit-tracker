@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.realtimetransit.backend.transit.repository.TransitStopMapper">
+    <resultMap id="transitStopRowMap" type="TransitStopEntity">
+        <constructor>
+            <idArg column="id" javaType="java.util.UUID"
+                   typeHandler="org.apache.ibatis.type.ObjectTypeHandler" />
+            <arg column="provider_id" javaType="java.lang.Long" />
+            <arg column="provider_stop_id" javaType="java.lang.String" />
+            <arg column="parent_station_id" javaType="java.util.UUID"
+                 typeHandler="org.apache.ibatis.type.ObjectTypeHandler" />
+            <arg column="public_name" javaType="java.lang.String" />
+            <arg column="latitude" javaType="java.math.BigDecimal" />
+            <arg column="longitude" javaType="java.math.BigDecimal" />
+            <arg column="source_updated_at" javaType="java.time.Instant" />
+            <arg column="created_at" javaType="java.time.Instant" />
+            <arg column="updated_at" javaType="java.time.Instant" />
+        </constructor>
+    </resultMap>
+
+    <resultMap id="directedStopMap" type="DirectedStopEntity">
+        <constructor>
+            <idArg column="directionId" javaType="java.util.UUID"
+                   typeHandler="org.apache.ibatis.type.ObjectTypeHandler" />
+            <arg column="directionName" javaType="java.lang.String" />
+            <arg column="stopId" javaType="java.util.UUID"
+                 typeHandler="org.apache.ibatis.type.ObjectTypeHandler" />
+            <arg column="stopName" javaType="java.lang.String" />
+            <arg column="stopSequence" javaType="int" />
+            <arg column="latitude" javaType="java.math.BigDecimal" />
+            <arg column="longitude" javaType="java.math.BigDecimal" />
+            <arg column="nextStopId" javaType="java.util.UUID"
+                 typeHandler="org.apache.ibatis.type.ObjectTypeHandler" />
+            <arg column="displayDirection" javaType="java.lang.String" />
+        </constructor>
+    </resultMap>
+
+    <resultMap id="destinationStopMap" type="DestinationStopEntity">
+        <constructor>
+            <idArg column="directionId" javaType="java.util.UUID"
+                   typeHandler="org.apache.ibatis.type.ObjectTypeHandler" />
+            <arg column="directionName" javaType="java.lang.String" />
+            <arg column="stopId" javaType="java.util.UUID"
+                 typeHandler="org.apache.ibatis.type.ObjectTypeHandler" />
+            <arg column="stopName" javaType="java.lang.String" />
+            <arg column="stopSequence" javaType="java.lang.Integer" />
+        </constructor>
+    </resultMap>
+
+    <sql id="transitStopColumns">
+        id, provider_id, provider_stop_id, parent_station_id, public_name,
+        latitude, longitude, source_updated_at, created_at, updated_at
+    </sql>
+
+    <select id="findByProviderResourceId" resultMap="transitStopRowMap">
+        SELECT <include refid="transitStopColumns" />
+        FROM transit_stop
+        WHERE provider_id = #{providerId}
+          AND provider_stop_id = #{providerStopId}
+    </select>
+
+    <insert id="upsertTransitStop">
+        INSERT INTO transit_stop (
+            id, provider_id, provider_stop_id, parent_station_id, public_name,
+            latitude, longitude, source_updated_at, created_at, updated_at
+        ) VALUES (
+            #{id}, #{providerId}, #{providerStopId}, #{parentStationId}, #{publicName},
+            #{latitude}, #{longitude}, #{sourceUpdatedAt}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+        )
+        ON CONFLICT (provider_id, provider_stop_id) DO UPDATE SET
+            parent_station_id = EXCLUDED.parent_station_id,
+            public_name = EXCLUDED.public_name,
+            latitude = EXCLUDED.latitude,
+            longitude = EXCLUDED.longitude,
+            source_updated_at = EXCLUDED.source_updated_at,
+            updated_at = CURRENT_TIMESTAMP
+    </insert>
+
+    <select id="findActiveStopsByLineId" resultMap="directedStopMap">
+        SELECT
+            rd.id AS "directionId",
+            rd.display_name AS "directionName",
+            ds.stop_id AS "stopId",
+            ts.public_name AS "stopName",
+            ds.stop_sequence AS "stopSequence",
+            ts.latitude,
+            ts.longitude,
+            ds.next_stop_id AS "nextStopId",
+            ds.display_direction AS "displayDirection"
+        FROM route_direction rd
+        INNER JOIN directed_stop ds
+            ON ds.direction_id = rd.id
+        INNER JOIN transit_stop ts
+            ON ts.id = ds.stop_id
+        WHERE rd.line_id = #{lineId}
+          AND rd.active = TRUE
+        ORDER BY rd.display_name,
+                 ds.stop_sequence ASC
+    </select>
+
+    <select id="findDestinationsAfterBoardingStop" resultMap="destinationStopMap">
+        SELECT
+            rd.id AS "directionId",
+            rd.display_name AS "directionName",
+            destination.stop_id AS "stopId",
+            destination_stop.public_name AS "stopName",
+            destination.stop_sequence AS "stopSequence"
+        FROM route_direction rd
+        INNER JOIN directed_stop boarding
+            ON boarding.direction_id = rd.id
+        INNER JOIN directed_stop destination
+            ON destination.direction_id = boarding.direction_id
+        INNER JOIN transit_stop destination_stop
+            ON destination_stop.id = destination.stop_id
+        WHERE rd.line_id = #{lineId}
+          AND boarding.stop_id = #{boardingStopId}
+          AND rd.active = TRUE
+          AND destination.stop_sequence > boarding.stop_sequence
+        ORDER BY rd.display_name,
+                 destination.stop_sequence ASC
+    </select>
+</mapper>

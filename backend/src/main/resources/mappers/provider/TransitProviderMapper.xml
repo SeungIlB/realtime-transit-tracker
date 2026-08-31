@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.realtimetransit.backend.provider.repository.TransitProviderMapper">
+    <resultMap id="transitProviderRowMap" type="TransitProviderEntity">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long" />
+            <arg column="code" javaType="string" />
+            <arg column="display_name" javaType="string" />
+            <arg column="transport_type" javaType="string" />
+            <arg column="active" javaType="java.lang.Boolean" />
+            <arg column="created_at" javaType="java.time.Instant" />
+            <arg column="updated_at" javaType="java.time.Instant" />
+        </constructor>
+    </resultMap>
+
+    <sql id="transitProviderColumns">
+        id, code, display_name, transport_type, active, created_at, updated_at
+    </sql>
+
+    <select id="findAll" resultMap="transitProviderRowMap">
+        SELECT <include refid="transitProviderColumns" />
+        FROM transit_provider
+        ORDER BY id
+    </select>
+
+    <select id="findByCode" resultMap="transitProviderRowMap">
+        SELECT <include refid="transitProviderColumns" />
+        FROM transit_provider
+        WHERE code = #{code}
+    </select>
+
+    <select id="findAllActive"
+            resultMap="transitProviderRowMap">
+        SELECT <include refid="transitProviderColumns" />
+        FROM transit_provider
+        WHERE active = TRUE
+        ORDER BY id ASC
+    </select>
+</mapper>

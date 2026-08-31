@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.realtimetransit.backend.transit.repository.TransitLineMapper">
+    <resultMap id="transitLineRowMap" type="TransitLineEntity">
+        <constructor>
+            <idArg column="id" javaType="java.util.UUID"
+                   typeHandler="org.apache.ibatis.type.ObjectTypeHandler" />
+            <arg column="provider_id" javaType="java.lang.Long" />
+            <arg column="provider_line_id" javaType="java.lang.String" />
+            <arg column="public_name" javaType="java.lang.String" />
+            <arg column="operator_name" javaType="java.lang.String" />
+            <arg column="route_type" javaType="java.lang.String" />
+            <arg column="active" javaType="java.lang.Boolean" />
+            <arg column="source_updated_at" javaType="java.time.Instant" />
+            <arg column="created_at" javaType="java.time.Instant" />
+            <arg column="updated_at" javaType="java.time.Instant" />
+        </constructor>
+    </resultMap>
+
+    <sql id="transitLineColumns">
+        id, provider_id, provider_line_id, public_name, operator_name,
+        route_type, active, source_updated_at, created_at, updated_at
+    </sql>
+
+    <select id="findByProviderResourceId" resultMap="transitLineRowMap">
+        SELECT <include refid="transitLineColumns" />
+        FROM transit_line
+        WHERE provider_id = #{providerId}
+          AND provider_line_id = #{providerLineId}
+    </select>
+
+    <insert id="upsertTransitLine">
+        INSERT INTO transit_line (
+            id, provider_id, provider_line_id, public_name, operator_name,
+            route_type, active, source_updated_at, created_at, updated_at
+        ) VALUES (
+            #{id}, #{providerId}, #{providerLineId}, #{publicName}, #{operatorName},
+            #{routeType}, #{active}, #{sourceUpdatedAt}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+        )
+        ON CONFLICT (provider_id, provider_line_id) DO UPDATE SET
+            public_name = EXCLUDED.public_name,
+            operator_name = EXCLUDED.operator_name,
+            route_type = EXCLUDED.route_type,
+            active = EXCLUDED.active,
+            source_updated_at = EXCLUDED.source_updated_at,
+            updated_at = CURRENT_TIMESTAMP
+    </insert>
+
+    <select id="searchActiveLines" resultMap="transitLineRowMap">
+        SELECT
+            id, provider_id, provider_line_id, public_name, operator_name, route_type, active, source_updated_at, created_at, updated_at
+        FROM transit_line
+        WHERE provider_id = #{providerId}
+        AND active = TRUE
+        AND public_name ILIKE CONCAT('%', #{query}, '%')
+        ORDER BY
+        CASE
+        WHEN public_name = #{query} THEN 0
+        ELSE 1
+        END,
+        CHAR_LENGTH(public_name),
+        public_name
+        LIMIT #{limit}
+    </select>
+
+    <update id="deactivateTransitLinesNotInProviderLineIds">
+        UPDATE transit_line
+        SET active = FALSE,
+        updated_at = CURRENT_TIMESTAMP
+        WHERE provider_id = #{providerId}
+        AND active = TRUE
+        <if test="retainedProviderLineIds != null and !retainedProviderLineIds.isEmpty()">
+            AND provider_line_id NOT IN
+            <foreach collection="retainedProviderLineIds"
+                     item="providerLineId"
+                     open="("
+                     separator=","
+                     close=")">
+                #{providerLineId}
+            </foreach>
+        </if>
+    </update>
+
+</mapper>
