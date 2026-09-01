@@ -11,8 +11,14 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 
+import com.realtimetransit.backend.common.error.BusinessException;
+import com.realtimetransit.backend.common.error.ErrorCode;
+
+import lombok.RequiredArgsConstructor;
+
 @Service
 @EnableConfigurationProperties(ExternalApiQuotaProperties.class)
+@RequiredArgsConstructor
 public class ExternalApiQuotaService {
 
 	private static final ZoneId KOREA_ZONE = ZoneId.of("Asia/Seoul");
@@ -33,19 +39,10 @@ public class ExternalApiQuotaService {
 	private final ExternalApiQuotaProperties properties;
 	private final Clock clock;
 
-	public ExternalApiQuotaService(
-			StringRedisTemplate redisTemplate,
-			ExternalApiQuotaProperties properties,
-			Clock clock) {
-		this.redisTemplate = redisTemplate;
-		this.properties = properties;
-		this.clock = clock;
-	}
-
 	public QuotaDecision tryAcquire(ExternalApiProvider provider) {
 		long dailyLimit = properties.dailyLimit(provider);
 		if (dailyLimit <= 0) {
-			throw new IllegalStateException("Daily API limit must be positive for " + provider);
+			throw new BusinessException(ErrorCode.INVALID_CONFIGURATION, provider.name());
 		}
 
 		var today = LocalDate.now(clock.withZone(KOREA_ZONE));
@@ -58,7 +55,7 @@ public class ExternalApiQuotaService {
 				Long.toString(resetsAt.getEpochSecond()));
 
 		if (remaining == null) {
-			throw new IllegalStateException("Redis did not return an API quota decision");
+			throw new BusinessException(ErrorCode.EXTERNAL_STORAGE_ERROR, "Redis quota decision is null");
 		}
 		return new QuotaDecision(remaining >= 0, Math.max(remaining, 0), resetsAt);
 	}

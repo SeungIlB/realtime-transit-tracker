@@ -26,8 +26,10 @@ class SystemControllerTest {
 	void returnsApplicationHealth() throws Exception {
 		mockMvc.perform(get("/api/v1/system/health"))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.status").value("UP"))
-				.andExpect(jsonPath("$.checkedAt").value("2026-08-27T00:00:00Z"));
+				.andExpect(jsonPath("$.success").value(true))
+				.andExpect(jsonPath("$.code").value("SUCCESS"))
+				.andExpect(jsonPath("$.data.status").value("UP"))
+				.andExpect(jsonPath("$.data.checkedAt").value("2026-08-27T00:00:00Z"));
 	}
 
 	static class FixedClockConfig {

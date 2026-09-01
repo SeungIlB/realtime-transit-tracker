@@ -7,6 +7,8 @@ import java.util.Map;
 import org.springframework.stereotype.Service;
 
 import com.realtimetransit.backend.common.quota.ExternalApiProvider;
+import com.realtimetransit.backend.common.error.BusinessException;
+import com.realtimetransit.backend.common.error.ErrorCode;
 import com.realtimetransit.backend.provider.client.TransitProviderClient;
 import com.realtimetransit.backend.provider.service.TransitProviderService;
 
@@ -19,7 +21,7 @@ public class TransitProviderServiceImpl implements TransitProviderService {
 		var clientsByProvider = new EnumMap<ExternalApiProvider, TransitProviderClient>(ExternalApiProvider.class);
 		for (var client : clients) {
 			if (clientsByProvider.put(client.provider(), client) != null) {
-				throw new IllegalStateException("Duplicate provider client: " + client.provider());
+				throw new BusinessException(ErrorCode.DUPLICATE_RESOURCE, "Provider client: " + client.provider());
 			}
 		}
 		this.clients = Map.copyOf(clientsByProvider);
@@ -29,7 +31,7 @@ public class TransitProviderServiceImpl implements TransitProviderService {
 	public TransitProviderClient getClient(ExternalApiProvider provider) {
 		var client = clients.get(provider);
 		if (client == null) {
-			throw new IllegalArgumentException("Unsupported provider: " + provider);
+			throw new BusinessException(ErrorCode.UNSUPPORTED_PROVIDER, String.valueOf(provider));
 		}
 		return client;
 	}
