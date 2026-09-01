@@ -41,12 +41,12 @@ class ExternalApiQuotaServiceIntegrationTest {
 		var second = quotaService.tryAcquire(ExternalApiProvider.SEOUL_SUBWAY);
 		var rejected = quotaService.tryAcquire(ExternalApiProvider.SEOUL_SUBWAY);
 
-		assertThat(first.allowed()).isTrue();
-		assertThat(first.remaining()).isEqualTo(1);
-		assertThat(second.allowed()).isTrue();
-		assertThat(second.remaining()).isZero();
-		assertThat(rejected.allowed()).isFalse();
-		assertThat(rejected.remaining()).isZero();
-		assertThat(first.resetsAt()).isEqualTo(second.resetsAt());
+		assertThat(first.isAllowed()).isTrue();
+		assertThat(first.getRemaining()).isEqualTo(1);
+		assertThat(second.isAllowed()).isTrue();
+		assertThat(second.getRemaining()).isZero();
+		assertThat(rejected.isAllowed()).isFalse();
+		assertThat(rejected.getRemaining()).isZero();
+		assertThat(first.getResetsAt()).isEqualTo(second.getResetsAt());
 	}
 }

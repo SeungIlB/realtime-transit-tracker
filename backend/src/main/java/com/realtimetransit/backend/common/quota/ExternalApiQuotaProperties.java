@@ -2,11 +2,22 @@ package com.realtimetransit.backend.common.quota;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+@Getter
+@Setter
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 @ConfigurationProperties("transit.api-quota")
-public record ExternalApiQuotaProperties(
-		long seoulSubwayDailyLimit,
-		long gbisDailyLimit,
-		long nationalPrecisionBusDailyLimit) {
+public class ExternalApiQuotaProperties {
+	private long seoulSubwayDailyLimit;
+	private long gbisDailyLimit;
+	private long nationalPrecisionBusDailyLimit;
 
 	public long dailyLimit(ExternalApiProvider provider) {
 		return switch (provider) {

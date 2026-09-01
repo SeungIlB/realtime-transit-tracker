@@ -4,27 +4,27 @@
         "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.realtimetransit.backend.provider.repository.VehicleRunObservationMapper">
     <resultMap id="vehicleRunObservationMap" type="VehicleRunObservationEntity">
-        <constructor>
-            <idArg column="id" javaType="java.lang.Long" />
-            <arg column="raw_observation_id" javaType="java.lang.Long" />
-            <arg column="line_id" javaType="java.util.UUID" />
-            <arg column="direction_id" javaType="java.util.UUID" />
-            <arg column="stop_pattern_id" javaType="java.util.UUID" />
-            <arg column="provider_vehicle_id" javaType="java.lang.String" />
-            <arg column="provider_run_id" javaType="java.lang.String" />
-            <arg column="destination_stop_id" javaType="java.util.UUID" />
-            <arg column="current_stop_id" javaType="java.util.UUID" />
-            <arg column="current_sequence" javaType="java.lang.Integer" />
-            <arg column="service_type" javaType="java.lang.String" />
-            <arg column="movement_status" javaType="java.lang.String" />
-            <arg column="latitude" javaType="java.math.BigDecimal" />
-            <arg column="longitude" javaType="java.math.BigDecimal" />
-            <arg column="speed_kph" javaType="java.math.BigDecimal" />
-            <arg column="bearing_degrees" javaType="java.math.BigDecimal" />
-            <arg column="position_source" javaType="java.lang.String" />
-            <arg column="observed_at" javaType="java.time.Instant" />
-            <arg column="received_at" javaType="java.time.Instant" />
-        </constructor>
+        
+            <id property="id" column="id" />
+            <result property="rawObservationId" column="raw_observation_id" />
+            <result property="lineId" column="line_id" />
+            <result property="directionId" column="direction_id" />
+            <result property="stopPatternId" column="stop_pattern_id" />
+            <result property="providerVehicleId" column="provider_vehicle_id" />
+            <result property="providerRunId" column="provider_run_id" />
+            <result property="destinationStopId" column="destination_stop_id" />
+            <result property="currentStopId" column="current_stop_id" />
+            <result property="currentSequence" column="current_sequence" />
+            <result property="serviceType" column="service_type" />
+            <result property="movementStatus" column="movement_status" />
+            <result property="latitude" column="latitude" />
+            <result property="longitude" column="longitude" />
+            <result property="speedKph" column="speed_kph" />
+            <result property="bearingDegrees" column="bearing_degrees" />
+            <result property="positionSource" column="position_source" />
+            <result property="observedAt" column="observed_at" />
+            <result property="receivedAt" column="received_at" />
+        
     </resultMap>
 
     <sql id="vehicleRunObservationColumns">
@@ -71,3 +71,4 @@
         LIMIT #{limit}
     </select>
 </mapper>
+

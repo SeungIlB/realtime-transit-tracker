@@ -4,29 +4,29 @@
         "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.realtimetransit.backend.provider.repository.RawObservationMapper">
     <resultMap id="rawObservationMap" type="RawObservationEntity">
-        <constructor>
-            <idArg column="id" javaType="java.lang.Long" />
-            <arg column="provider_id" javaType="java.lang.Long" />
-            <arg column="endpoint" javaType="java.lang.String" />
-            <arg column="request_key" javaType="java.lang.String" />
-            <arg column="received_at" javaType="java.time.Instant" />
-            <arg column="provider_observed_at" javaType="java.time.Instant" />
-            <arg column="response_status" javaType="java.lang.Integer" />
-            <arg column="payload" javaType="java.lang.String" />
-            <arg column="expires_at" javaType="java.time.Instant" />
-        </constructor>
+        
+            <id property="id" column="id" />
+            <result property="providerId" column="provider_id" />
+            <result property="endpoint" column="endpoint" />
+            <result property="requestKey" column="request_key" />
+            <result property="receivedAt" column="received_at" />
+            <result property="providerObservedAt" column="provider_observed_at" />
+            <result property="responseStatus" column="response_status" />
+            <result property="payload" column="payload" />
+            <result property="expiresAt" column="expires_at" />
+        
     </resultMap>
 
     <resultMap id="providerCollectionStatusMap" type="ProviderCollectionStatusEntity">
-        <constructor>
-            <idArg column="providerId" javaType="java.lang.Long" />
-            <arg column="providerCode" javaType="java.lang.String" />
-            <arg column="endpoint" javaType="java.lang.String" />
-            <arg column="totalCalls" javaType="java.lang.Long" />
-            <arg column="successfulCalls" javaType="java.lang.Long" />
-            <arg column="failedCalls" javaType="java.lang.Long" />
-            <arg column="latestReceivedAt" javaType="java.time.Instant" />
-        </constructor>
+        
+            <id property="providerId" column="providerId" />
+            <result property="providerCode" column="providerCode" />
+            <result property="endpoint" column="endpoint" />
+            <result property="totalCalls" column="totalCalls" />
+            <result property="successfulCalls" column="successfulCalls" />
+            <result property="failedCalls" column="failedCalls" />
+            <result property="latestReceivedAt" column="latestReceivedAt" />
+        
     </resultMap>
 
     <sql id="rawObservationColumns">
@@ -100,3 +100,4 @@
         ORDER BY "providerId" ASC, "endpoint" ASC
     </select>
 </mapper>
+

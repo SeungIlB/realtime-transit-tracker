@@ -4,24 +4,24 @@
         "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.realtimetransit.backend.transit.repository.ArrivalQueryMapper">
     <resultMap id="upcomingArrivalMap" type="UpcomingArrivalEntity">
-        <constructor>
-            <idArg column="arrivalPredictionId" javaType="java.lang.Long" />
-            <arg column="vehicleRunObservationId" javaType="java.lang.Long" />
-            <arg column="providerVehicleId" javaType="java.lang.String" />
-            <arg column="lineId" javaType="java.util.UUID" />
-            <arg column="boardingStopId" javaType="java.util.UUID" />
-            <arg column="expectedAt" javaType="java.time.Instant" />
-            <arg column="minExpectedAt" javaType="java.time.Instant" />
-            <arg column="maxExpectedAt" javaType="java.time.Instant" />
-            <arg column="remainingStops" javaType="java.lang.Integer" />
-            <arg column="source" javaType="java.lang.String" />
-            <arg column="confidence" javaType="java.lang.String" />
-            <arg column="movementStatus" javaType="java.lang.String" />
-            <arg column="currentStopId" javaType="java.util.UUID" />
-            <arg column="currentSequence" javaType="java.lang.Integer" />
-            <arg column="observedAt" javaType="java.time.Instant" />
-            <arg column="receivedAt" javaType="java.time.Instant" />
-        </constructor>
+        
+            <id property="arrivalPredictionId" column="arrivalPredictionId" />
+            <result property="vehicleRunObservationId" column="vehicleRunObservationId" />
+            <result property="providerVehicleId" column="providerVehicleId" />
+            <result property="lineId" column="lineId" />
+            <result property="boardingStopId" column="boardingStopId" />
+            <result property="expectedAt" column="expectedAt" />
+            <result property="minExpectedAt" column="minExpectedAt" />
+            <result property="maxExpectedAt" column="maxExpectedAt" />
+            <result property="remainingStops" column="remainingStops" />
+            <result property="source" column="source" />
+            <result property="confidence" column="confidence" />
+            <result property="movementStatus" column="movementStatus" />
+            <result property="currentStopId" column="currentStopId" />
+            <result property="currentSequence" column="currentSequence" />
+            <result property="observedAt" column="observedAt" />
+            <result property="receivedAt" column="receivedAt" />
+        
     </resultMap>
 
     <select id="findUpcomingArrivalsByLineIdAndBoardingStopIdAndAlightingStopId"
@@ -91,3 +91,4 @@
         LIMIT #{limit}
     </select>
 </mapper>
+

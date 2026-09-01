@@ -4,49 +4,42 @@
         "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.realtimetransit.backend.transit.repository.TransitStopMapper">
     <resultMap id="transitStopRowMap" type="TransitStopEntity">
-        <constructor>
-            <idArg column="id" javaType="java.util.UUID"
-                   typeHandler="org.apache.ibatis.type.ObjectTypeHandler" />
-            <arg column="provider_id" javaType="java.lang.Long" />
-            <arg column="provider_stop_id" javaType="java.lang.String" />
-            <arg column="parent_station_id" javaType="java.util.UUID"
-                 typeHandler="org.apache.ibatis.type.ObjectTypeHandler" />
-            <arg column="public_name" javaType="java.lang.String" />
-            <arg column="latitude" javaType="java.math.BigDecimal" />
-            <arg column="longitude" javaType="java.math.BigDecimal" />
-            <arg column="source_updated_at" javaType="java.time.Instant" />
-            <arg column="created_at" javaType="java.time.Instant" />
-            <arg column="updated_at" javaType="java.time.Instant" />
-        </constructor>
+        
+            <id property="id" column="id" typeHandler="org.apache.ibatis.type.ObjectTypeHandler" />
+            <result property="providerId" column="provider_id" />
+            <result property="providerStopId" column="provider_stop_id" />
+            <result property="parentStationId" column="parent_station_id" typeHandler="org.apache.ibatis.type.ObjectTypeHandler" />
+            <result property="publicName" column="public_name" />
+            <result property="latitude" column="latitude" />
+            <result property="longitude" column="longitude" />
+            <result property="sourceUpdatedAt" column="source_updated_at" />
+            <result property="createdAt" column="created_at" />
+            <result property="updatedAt" column="updated_at" />
+        
     </resultMap>
 
     <resultMap id="directedStopMap" type="DirectedStopEntity">
-        <constructor>
-            <idArg column="directionId" javaType="java.util.UUID"
-                   typeHandler="org.apache.ibatis.type.ObjectTypeHandler" />
-            <arg column="directionName" javaType="java.lang.String" />
-            <arg column="stopId" javaType="java.util.UUID"
-                 typeHandler="org.apache.ibatis.type.ObjectTypeHandler" />
-            <arg column="stopName" javaType="java.lang.String" />
-            <arg column="stopSequence" javaType="int" />
-            <arg column="latitude" javaType="java.math.BigDecimal" />
-            <arg column="longitude" javaType="java.math.BigDecimal" />
-            <arg column="nextStopId" javaType="java.util.UUID"
-                 typeHandler="org.apache.ibatis.type.ObjectTypeHandler" />
-            <arg column="displayDirection" javaType="java.lang.String" />
-        </constructor>
+        
+            <id property="directionId" column="directionId" typeHandler="org.apache.ibatis.type.ObjectTypeHandler" />
+            <result property="directionName" column="directionName" />
+            <result property="stopId" column="stopId" typeHandler="org.apache.ibatis.type.ObjectTypeHandler" />
+            <result property="stopName" column="stopName" />
+            <result property="stopSequence" column="stopSequence" />
+            <result property="latitude" column="latitude" />
+            <result property="longitude" column="longitude" />
+            <result property="nextStopId" column="nextStopId" typeHandler="org.apache.ibatis.type.ObjectTypeHandler" />
+            <result property="displayDirection" column="displayDirection" />
+        
     </resultMap>
 
     <resultMap id="destinationStopMap" type="DestinationStopEntity">
-        <constructor>
-            <idArg column="directionId" javaType="java.util.UUID"
-                   typeHandler="org.apache.ibatis.type.ObjectTypeHandler" />
-            <arg column="directionName" javaType="java.lang.String" />
-            <arg column="stopId" javaType="java.util.UUID"
-                 typeHandler="org.apache.ibatis.type.ObjectTypeHandler" />
-            <arg column="stopName" javaType="java.lang.String" />
-            <arg column="stopSequence" javaType="java.lang.Integer" />
-        </constructor>
+        
+            <id property="directionId" column="directionId" typeHandler="org.apache.ibatis.type.ObjectTypeHandler" />
+            <result property="directionName" column="directionName" />
+            <result property="stopId" column="stopId" typeHandler="org.apache.ibatis.type.ObjectTypeHandler" />
+            <result property="stopName" column="stopName" />
+            <result property="stopSequence" column="stopSequence" />
+        
     </resultMap>
 
     <sql id="transitStopColumns">
@@ -122,3 +115,4 @@
                  destination.stop_sequence ASC
     </select>
 </mapper>
+

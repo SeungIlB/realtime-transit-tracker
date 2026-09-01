@@ -74,7 +74,7 @@ class TransitLineMapperIntegrationTest {
 
 	@Test
 	void upsertsAndReadsLineAndStopThroughXmlMappers() {
-		long providerId = transitProviderMapper.findByCode("GBIS").orElseThrow().id();
+		long providerId = transitProviderMapper.findByCode("GBIS").orElseThrow().getId();
 		Instant sourceUpdatedAt = Instant.parse("2026-08-28T00:00:00Z");
 		var line = new TransitLineEntity(
 				UUID.randomUUID(), providerId, "route-1", "1000", "operator", "CITY_BUS",
@@ -92,21 +92,21 @@ class TransitLineMapperIntegrationTest {
 
 		UUID directionId = UUID.randomUUID();
 		routeDirectionMapper.upsertRouteDirection(new RouteDirectionEntity(
-				directionId, line.id(), "outbound", stop.id(), destinationStop.id(), destinationStop.id(),
+				directionId, line.getId(), "outbound", stop.getId(), destinationStop.getId(), destinationStop.getId(),
 				"종점 방면", true, null, null));
 		directedStopMapper.upsertDirectedStop(new DirectedStopAssignmentEntity(
-				UUID.randomUUID(), line.id(), directionId, stop.id(), 1, destinationStop.id(),
+				UUID.randomUUID(), line.getId(), directionId, stop.getId(), 1, destinationStop.getId(),
 				"platform-1", "종점 방면", "segment-1"));
 		directedStopMapper.upsertDirectedStop(new DirectedStopAssignmentEntity(
-				UUID.randomUUID(), line.id(), directionId, destinationStop.id(), 2, null,
+				UUID.randomUUID(), line.getId(), directionId, destinationStop.getId(), 2, null,
 				"platform-2", "종점 방면", "segment-2"));
 		UUID arrivalPatternId = UUID.randomUUID();
 		stopPatternMapper.upsertStopPattern(new StopPatternEntity(
-				arrivalPatternId, line.id(), "arrival-pattern", "LOCAL",
+				arrivalPatternId, line.getId(), "arrival-pattern", "LOCAL",
 				LocalDate.parse("2026-09-01"), null, true, null, null));
 		stopPatternMapper.upsertStopPatternStops(List.of(
-				new StopPatternStopEntity(arrivalPatternId, 1, stop.id(), true, false),
-				new StopPatternStopEntity(arrivalPatternId, 2, destinationStop.id(), false, true)));
+				new StopPatternStopEntity(arrivalPatternId, 1, stop.getId(), true, false),
+				new StopPatternStopEntity(arrivalPatternId, 2, destinationStop.getId(), false, true)));
 
 		Instant receivedAt = Instant.parse("2026-08-31T01:00:00Z");
 		long rawObservationId = rawObservationMapper.insertRawObservation(new RawObservationEntity(
@@ -115,8 +115,8 @@ class TransitLineMapperIntegrationTest {
 				receivedAt.plusSeconds(30)));
 		long vehicleObservationId = vehicleRunObservationMapper.insertVehicleRunObservation(
 				new VehicleRunObservationEntity(
-						null, rawObservationId, line.id(), directionId, arrivalPatternId,
-						"vehicle-1", "run-1", destinationStop.id(), stop.id(), 1,
+						null, rawObservationId, line.getId(), directionId, arrivalPatternId,
+						"vehicle-1", "run-1", destinationStop.getId(), stop.getId(), 1,
 						"LOCAL", "APPROACHING", new BigDecimal("37.123456"),
 						new BigDecimal("127.123456"), new BigDecimal("32.50"),
 						new BigDecimal("175.25"), "GPS", receivedAt.minusSeconds(5), receivedAt));
@@ -127,16 +127,16 @@ class TransitLineMapperIntegrationTest {
 						+ "FROM vehicle_run_observation WHERE id = ?",
 				vehicleObservationId))
 				.containsEntry("raw_observation_id", rawObservationId)
-				.containsEntry("line_id", line.id())
+				.containsEntry("line_id", line.getId())
 				.containsEntry("direction_id", directionId)
 				.containsEntry("provider_vehicle_id", "vehicle-1")
-				.containsEntry("current_stop_id", stop.id())
+				.containsEntry("current_stop_id", stop.getId())
 				.containsEntry("movement_status", "APPROACHING")
 				.containsEntry("position_source", "GPS");
 
 		long nullableVehicleObservationId = vehicleRunObservationMapper.insertVehicleRunObservation(
 				new VehicleRunObservationEntity(
-						null, null, line.id(), null, arrivalPatternId, "vehicle-2", null,
+						null, null, line.getId(), null, arrivalPatternId, "vehicle-2", null,
 						null, null, null, "UNKNOWN", "UNKNOWN", null, null,
 						null, null, "STOP_SEQUENCE", receivedAt, receivedAt));
 		assertThat(jdbcTemplate.queryForObject(
@@ -148,7 +148,7 @@ class TransitLineMapperIntegrationTest {
 
 		long arrivalPredictionId = arrivalPredictionObservationMapper.insertArrivalPredictionObservation(
 				new ArrivalPredictionObservationEntity(
-						null, rawObservationId, vehicleObservationId, stop.id(),
+						null, rawObservationId, vehicleObservationId, stop.getId(),
 						receivedAt.plusSeconds(300), receivedAt.plusSeconds(240),
 						receivedAt.plusSeconds(420), 3, "PROVIDER", "HIGH",
 						receivedAt.minusSeconds(5), receivedAt));
@@ -159,14 +159,14 @@ class TransitLineMapperIntegrationTest {
 				arrivalPredictionId))
 				.containsEntry("raw_observation_id", rawObservationId)
 				.containsEntry("vehicle_run_observation_id", vehicleObservationId)
-				.containsEntry("boarding_stop_id", stop.id())
+				.containsEntry("boarding_stop_id", stop.getId())
 				.containsEntry("remaining_stops", 3)
 				.containsEntry("source", "PROVIDER")
 				.containsEntry("confidence", "HIGH");
 
 		long nullableArrivalPredictionId = arrivalPredictionObservationMapper
 				.insertArrivalPredictionObservation(new ArrivalPredictionObservationEntity(
-						null, null, null, destinationStop.id(), null, null, null, null,
+						null, null, null, destinationStop.getId(), null, null, null, null,
 						"CALCULATED", "UNKNOWN", receivedAt, receivedAt));
 		assertThat(jdbcTemplate.queryForObject(
 				"SELECT raw_observation_id IS NULL AND vehicle_run_observation_id IS NULL "
@@ -177,68 +177,68 @@ class TransitLineMapperIntegrationTest {
 
 		long oldestArrivalPredictionId = arrivalPredictionObservationMapper.insertArrivalPredictionObservation(
 				new ArrivalPredictionObservationEntity(
-						null, rawObservationId, vehicleObservationId, stop.id(),
+						null, rawObservationId, vehicleObservationId, stop.getId(),
 						receivedAt.plusSeconds(60), null, null, 5, "PROVIDER", "LOW",
 						receivedAt.minusSeconds(60), receivedAt.minusSeconds(55)));
 		arrivalPredictionObservationMapper.insertArrivalPredictionObservation(
 				new ArrivalPredictionObservationEntity(
-						null, null, nullableVehicleObservationId, stop.id(),
+						null, null, nullableVehicleObservationId, stop.getId(),
 						receivedAt.plusSeconds(180), null, null, 2, "CALCULATED", "MEDIUM",
 						receivedAt, receivedAt));
 		UUID reversedPatternId = UUID.randomUUID();
 		stopPatternMapper.upsertStopPattern(new StopPatternEntity(
-				reversedPatternId, line.id(), "reversed-arrival-pattern", "LOCAL",
+				reversedPatternId, line.getId(), "reversed-arrival-pattern", "LOCAL",
 				LocalDate.parse("2026-09-01"), null, true, null, null));
 		stopPatternMapper.upsertStopPatternStops(List.of(
-				new StopPatternStopEntity(reversedPatternId, 1, destinationStop.id(), false, true),
-				new StopPatternStopEntity(reversedPatternId, 2, stop.id(), true, false)));
+				new StopPatternStopEntity(reversedPatternId, 1, destinationStop.getId(), false, true),
+				new StopPatternStopEntity(reversedPatternId, 2, stop.getId(), true, false)));
 		long reversedVehicleObservationId = vehicleRunObservationMapper.insertVehicleRunObservation(
 				new VehicleRunObservationEntity(
-						null, null, line.id(), directionId, reversedPatternId, "vehicle-reversed", null,
-						destinationStop.id(), stop.id(), 2, "LOCAL", "APPROACHING",
+						null, null, line.getId(), directionId, reversedPatternId, "vehicle-reversed", null,
+						destinationStop.getId(), stop.getId(), 2, "LOCAL", "APPROACHING",
 						null, null, null, null, "STOP_SEQUENCE", receivedAt, receivedAt));
 		arrivalPredictionObservationMapper.insertArrivalPredictionObservation(
 				new ArrivalPredictionObservationEntity(
-						null, null, reversedVehicleObservationId, stop.id(),
+						null, null, reversedVehicleObservationId, stop.getId(),
 						receivedAt.plusSeconds(30), null, null, 1, "CALCULATED", "HIGH",
 						receivedAt, receivedAt));
 
 		assertThat(arrivalQueryMapper.findUpcomingArrivalsByLineIdAndBoardingStopIdAndAlightingStopId(
-				line.id(), stop.id(), destinationStop.id(), receivedAt,
+				line.getId(), stop.getId(), destinationStop.getId(), receivedAt,
 				receivedAt.minusSeconds(120), 2))
 				.satisfiesExactly(
 						secondVehicle -> {
-							assertThat(secondVehicle.providerVehicleId()).isEqualTo("vehicle-2");
-							assertThat(secondVehicle.expectedAt()).isEqualTo(receivedAt.plusSeconds(180));
+							assertThat(secondVehicle.getProviderVehicleId()).isEqualTo("vehicle-2");
+							assertThat(secondVehicle.getExpectedAt()).isEqualTo(receivedAt.plusSeconds(180));
 						},
 						firstVehicle -> {
-							assertThat(firstVehicle.providerVehicleId()).isEqualTo("vehicle-1");
-							assertThat(firstVehicle.expectedAt()).isEqualTo(receivedAt.plusSeconds(300));
-							assertThat(firstVehicle.confidence()).isEqualTo("HIGH");
+							assertThat(firstVehicle.getProviderVehicleId()).isEqualTo("vehicle-1");
+							assertThat(firstVehicle.getExpectedAt()).isEqualTo(receivedAt.plusSeconds(300));
+							assertThat(firstVehicle.getConfidence()).isEqualTo("HIGH");
 						});
 
 		vehicleRunObservationMapper.insertVehicleRunObservation(new VehicleRunObservationEntity(
-				null, null, line.id(), directionId, arrivalPatternId, "history-vehicle", null,
-				destinationStop.id(), stop.id(), 1, "LOCAL", "BETWEEN",
+				null, null, line.getId(), directionId, arrivalPatternId, "history-vehicle", null,
+				destinationStop.getId(), stop.getId(), 1, "LOCAL", "BETWEEN",
 				null, null, null, null, "STOP_SEQUENCE",
 				receivedAt.minusSeconds(10), receivedAt.minusSeconds(10)));
 		long boundaryHistoryId = vehicleRunObservationMapper.insertVehicleRunObservation(
 				new VehicleRunObservationEntity(
-						null, null, line.id(), directionId, arrivalPatternId, "history-vehicle", null,
-						destinationStop.id(), stop.id(), 1, "LOCAL", "APPROACHING",
+						null, null, line.getId(), directionId, arrivalPatternId, "history-vehicle", null,
+						destinationStop.getId(), stop.getId(), 1, "LOCAL", "APPROACHING",
 						null, null, null, null, "STOP_SEQUENCE", receivedAt, receivedAt));
 		long latestReceivedHistoryId = vehicleRunObservationMapper.insertVehicleRunObservation(
 				new VehicleRunObservationEntity(
-						null, null, line.id(), directionId, arrivalPatternId, "history-vehicle", null,
-						destinationStop.id(), stop.id(), 1, "LOCAL", "ARRIVED",
+						null, null, line.getId(), directionId, arrivalPatternId, "history-vehicle", null,
+						destinationStop.getId(), stop.getId(), 1, "LOCAL", "ARRIVED",
 						null, null, null, null, "STOP_SEQUENCE",
 						receivedAt, receivedAt.plusSeconds(1)));
 		assertThat(vehicleRunObservationMapper.findRecentVehicleRunObservations(
-				line.id(), "history-vehicle", receivedAt, 2))
-				.extracting(VehicleRunObservationEntity::id)
+				line.getId(), "history-vehicle", receivedAt, 2))
+				.extracting(VehicleRunObservationEntity::getId)
 				.containsExactly(latestReceivedHistoryId, boundaryHistoryId);
 		assertThat(vehicleRunObservationMapper.findRecentVehicleRunObservations(
-				line.id(), "missing-vehicle", receivedAt.minusSeconds(60), 2))
+				line.getId(), "missing-vehicle", receivedAt.minusSeconds(60), 2))
 				.isEmpty();
 
 		long oldestExpiredRawId = rawObservationMapper.insertRawObservation(new RawObservationEntity(
@@ -278,7 +278,7 @@ class TransitLineMapperIntegrationTest {
 
 		long newerOldArrivalPredictionId = arrivalPredictionObservationMapper
 				.insertArrivalPredictionObservation(new ArrivalPredictionObservationEntity(
-						null, null, vehicleObservationId, stop.id(), receivedAt.plusSeconds(240),
+						null, null, vehicleObservationId, stop.getId(), receivedAt.plusSeconds(240),
 						null, null, 4, "CALCULATED", "LOW",
 						receivedAt.minusSeconds(35), receivedAt.minusSeconds(30)));
 		assertThat(arrivalPredictionObservationMapper.deleteArrivalPredictionsReceivedBefore(
@@ -303,17 +303,17 @@ class TransitLineMapperIntegrationTest {
 
 		long oldestVehicleObservationId = vehicleRunObservationMapper.insertVehicleRunObservation(
 				new VehicleRunObservationEntity(
-						null, null, line.id(), directionId, null, "cleanup-vehicle-1", null,
-						null, stop.id(), 1, "LOCAL", "BETWEEN", null, null, null, null,
+						null, null, line.getId(), directionId, null, "cleanup-vehicle-1", null,
+						null, stop.getId(), 1, "LOCAL", "BETWEEN", null, null, null, null,
 						"STOP_SEQUENCE", receivedAt.minusSeconds(105), receivedAt.minusSeconds(100)));
 		long newerOldVehicleObservationId = vehicleRunObservationMapper.insertVehicleRunObservation(
 				new VehicleRunObservationEntity(
-						null, null, line.id(), directionId, null, "cleanup-vehicle-2", null,
-						null, stop.id(), 1, "LOCAL", "BETWEEN", null, null, null, null,
+						null, null, line.getId(), directionId, null, "cleanup-vehicle-2", null,
+						null, stop.getId(), 1, "LOCAL", "BETWEEN", null, null, null, null,
 						"STOP_SEQUENCE", receivedAt.minusSeconds(55), receivedAt.minusSeconds(50)));
 		long referencingPredictionId = arrivalPredictionObservationMapper.insertArrivalPredictionObservation(
 				new ArrivalPredictionObservationEntity(
-						null, null, oldestVehicleObservationId, stop.id(), receivedAt.plusSeconds(600),
+						null, null, oldestVehicleObservationId, stop.getId(), receivedAt.plusSeconds(600),
 						null, null, 6, "CALCULATED", "LOW", receivedAt, receivedAt));
 
 		assertThat(vehicleRunObservationMapper.deleteVehicleRunObservationsReceivedBefore(receivedAt, 1))
@@ -332,47 +332,47 @@ class TransitLineMapperIntegrationTest {
 				Boolean.class, referencingPredictionId))
 				.isTrue();
 		assertThat(jdbcTemplate.queryForObject(
-				"SELECT COUNT(*) FROM transit_line WHERE id = ?", Integer.class, line.id()))
+				"SELECT COUNT(*) FROM transit_line WHERE id = ?", Integer.class, line.getId()))
 				.isEqualTo(1);
 
 		assertThat(transitLineMapper.findByProviderResourceId(providerId, "route-1"))
-				.get().extracting(TransitLineEntity::publicName).isEqualTo("1000");
+				.get().extracting(TransitLineEntity::getPublicName).isEqualTo("1000");
 		assertThat(transitStopMapper.findByProviderResourceId(providerId, "stop-1"))
-				.get().extracting(TransitStopEntity::publicName).isEqualTo("테스트 정류장");
-		assertThat(transitStopMapper.findActiveStopsByLineId(line.id()))
-				.extracting(directedStop -> directedStop.stopSequence())
+				.get().extracting(TransitStopEntity::getPublicName).isEqualTo("테스트 정류장");
+		assertThat(transitStopMapper.findActiveStopsByLineId(line.getId()))
+				.extracting(directedStop -> directedStop.getStopSequence())
 				.containsExactly(1, 2);
-		assertThat(transitStopMapper.findDestinationsAfterBoardingStop(line.id(), stop.id()))
+		assertThat(transitStopMapper.findDestinationsAfterBoardingStop(line.getId(), stop.getId()))
 				.singleElement()
 				.satisfies(destination -> {
-					assertThat(destination.directionId()).isEqualTo(directionId);
-					assertThat(destination.stopId()).isEqualTo(destinationStop.id());
-					assertThat(destination.stopName()).isEqualTo("다음 정류장");
-					assertThat(destination.stopSequence()).isEqualTo(2);
+					assertThat(destination.getDirectionId()).isEqualTo(directionId);
+					assertThat(destination.getStopId()).isEqualTo(destinationStop.getId());
+					assertThat(destination.getStopName()).isEqualTo("다음 정류장");
+					assertThat(destination.getStopSequence()).isEqualTo(2);
 				});
 
 		routeDirectionMapper.upsertRouteDirection(new RouteDirectionEntity(
-				UUID.randomUUID(), line.id(), "outbound", stop.id(), destinationStop.id(), destinationStop.id(),
+				UUID.randomUUID(), line.getId(), "outbound", stop.getId(), destinationStop.getId(), destinationStop.getId(),
 				"수정된 종점 방면", false, null, null));
 		assertThat(jdbcTemplate.queryForObject(
 				"SELECT display_name FROM route_direction WHERE id = ?", String.class, directionId))
 				.isEqualTo("수정된 종점 방면");
 		assertThat(jdbcTemplate.queryForObject(
 				"SELECT COUNT(*) FROM route_direction WHERE line_id = ? AND provider_direction_id = ?",
-				Integer.class, line.id(), "outbound"))
+				Integer.class, line.getId(), "outbound"))
 				.isEqualTo(1);
-		assertThat(routeDirectionMapper.findRouteDirectionByBusinessKey(line.id(), "outbound"))
+		assertThat(routeDirectionMapper.findRouteDirectionByBusinessKey(line.getId(), "outbound"))
 				.get()
 				.satisfies(direction -> {
-					assertThat(direction.id()).isEqualTo(directionId);
-					assertThat(direction.displayName()).isEqualTo("수정된 종점 방면");
-					assertThat(direction.active()).isFalse();
+					assertThat(direction.getId()).isEqualTo(directionId);
+					assertThat(direction.getDisplayName()).isEqualTo("수정된 종점 방면");
+					assertThat(direction.getActive()).isFalse();
 				});
-		assertThat(routeDirectionMapper.findRouteDirectionByBusinessKey(line.id(), "missing-direction"))
+		assertThat(routeDirectionMapper.findRouteDirectionByBusinessKey(line.getId(), "missing-direction"))
 				.isEmpty();
 
 		directedStopMapper.upsertDirectedStop(new DirectedStopAssignmentEntity(
-				UUID.randomUUID(), line.id(), directionId, destinationStop.id(), 2, null,
+				UUID.randomUUID(), line.getId(), directionId, destinationStop.getId(), 2, null,
 				"platform-2-updated", "수정된 종점 방면", "segment-2-updated"));
 		assertThat(jdbcTemplate.queryForObject(
 				"SELECT COUNT(*) FROM directed_stop WHERE direction_id = ? AND stop_sequence = ?",
@@ -387,31 +387,31 @@ class TransitLineMapperIntegrationTest {
 				.containsEntry("segment_id", "segment-2-updated");
 
 		directedStopMapper.upsertDirectedStop(new DirectedStopAssignmentEntity(
-				UUID.randomUUID(), line.id(), directionId, destinationStop.id(), 3, null,
+				UUID.randomUUID(), line.getId(), directionId, destinationStop.getId(), 3, null,
 				"platform-3", "수정된 종점 방면", "segment-3"));
 		UUID otherDirectionId = UUID.randomUUID();
 		routeDirectionMapper.upsertRouteDirection(new RouteDirectionEntity(
-				otherDirectionId, line.id(), "inbound", destinationStop.id(), stop.id(), stop.id(),
+				otherDirectionId, line.getId(), "inbound", destinationStop.getId(), stop.getId(), stop.getId(),
 				"기점 방면", true, null, null));
 		directedStopMapper.upsertDirectedStop(new DirectedStopAssignmentEntity(
-				UUID.randomUUID(), line.id(), otherDirectionId, destinationStop.id(), 1, null,
+				UUID.randomUUID(), line.getId(), otherDirectionId, destinationStop.getId(), 1, null,
 				"platform-inbound", "기점 방면", "segment-inbound"));
 		UUID removedDirectionId = UUID.randomUUID();
 		routeDirectionMapper.upsertRouteDirection(new RouteDirectionEntity(
-				removedDirectionId, line.id(), "weekend", stop.id(), destinationStop.id(), destinationStop.id(),
+				removedDirectionId, line.getId(), "weekend", stop.getId(), destinationStop.getId(), destinationStop.getId(),
 				"주말 종점 방면", true, null, null));
 
 		assertThat(routeDirectionMapper.deactivateRouteDirectionsNotInProviderIds(
-				line.id(), List.of("inbound")))
+				line.getId(), List.of("inbound")))
 				.isEqualTo(1);
-		assertThat(routeDirectionMapper.findRouteDirectionByBusinessKey(line.id(), "inbound"))
-				.get().extracting(RouteDirectionEntity::active).isEqualTo(true);
-		assertThat(routeDirectionMapper.findRouteDirectionByBusinessKey(line.id(), "weekend"))
-				.get().extracting(RouteDirectionEntity::active).isEqualTo(false);
-		assertThat(routeDirectionMapper.deactivateRouteDirectionsNotInProviderIds(line.id(), List.of()))
+		assertThat(routeDirectionMapper.findRouteDirectionByBusinessKey(line.getId(), "inbound"))
+				.get().extracting(RouteDirectionEntity::getActive).isEqualTo(true);
+		assertThat(routeDirectionMapper.findRouteDirectionByBusinessKey(line.getId(), "weekend"))
+				.get().extracting(RouteDirectionEntity::getActive).isEqualTo(false);
+		assertThat(routeDirectionMapper.deactivateRouteDirectionsNotInProviderIds(line.getId(), List.of()))
 				.isEqualTo(1);
-		assertThat(routeDirectionMapper.findRouteDirectionByBusinessKey(line.id(), "inbound"))
-				.get().extracting(RouteDirectionEntity::active).isEqualTo(false);
+		assertThat(routeDirectionMapper.findRouteDirectionByBusinessKey(line.getId(), "inbound"))
+				.get().extracting(RouteDirectionEntity::getActive).isEqualTo(false);
 
 		assertThat(directedStopMapper.deleteDirectedStopsNotInSequences(directionId, List.of(1, 2)))
 				.isEqualTo(1);
@@ -430,98 +430,98 @@ class TransitLineMapperIntegrationTest {
 				Integer.class, otherDirectionId))
 				.isZero();
 
-		insertStopPattern(line.id(), "local-valid-on-end-date", "LOCAL",
+		insertStopPattern(line.getId(), "local-valid-on-end-date", "LOCAL",
 				LocalDate.parse("2026-08-01"), LocalDate.parse("2026-08-31"), true);
-		insertStopPattern(line.id(), "express-open-ended", "EXPRESS",
+		insertStopPattern(line.getId(), "express-open-ended", "EXPRESS",
 				LocalDate.parse("2026-08-31"), null, true);
-		insertStopPattern(line.id(), "expired", "LOCAL",
+		insertStopPattern(line.getId(), "expired", "LOCAL",
 				LocalDate.parse("2026-08-01"), LocalDate.parse("2026-08-30"), true);
-		insertStopPattern(line.id(), "future", "LOCAL",
+		insertStopPattern(line.getId(), "future", "LOCAL",
 				LocalDate.parse("2026-09-01"), null, true);
-		insertStopPattern(line.id(), "inactive", "LOCAL",
+		insertStopPattern(line.getId(), "inactive", "LOCAL",
 				LocalDate.parse("2026-08-01"), null, false);
 
 		assertThat(stopPatternMapper.findActiveStopPatternsByLineIdAndServiceDate(
-				line.id(), LocalDate.parse("2026-08-31")))
-				.extracting(pattern -> pattern.providerPatternId())
+				line.getId(), LocalDate.parse("2026-08-31")))
+				.extracting(pattern -> pattern.getProviderPatternId())
 				.containsExactly("express-open-ended", "local-valid-on-end-date");
 
 		UUID upsertedPatternId = UUID.randomUUID();
 		LocalDate upsertedPatternValidFrom = LocalDate.parse("2026-09-01");
 		stopPatternMapper.upsertStopPattern(new StopPatternEntity(
-				upsertedPatternId, line.id(), "upsert-pattern", "LOCAL",
+				upsertedPatternId, line.getId(), "upsert-pattern", "LOCAL",
 				upsertedPatternValidFrom, null, true, null, null));
 		stopPatternMapper.upsertStopPattern(new StopPatternEntity(
-				UUID.randomUUID(), line.id(), "upsert-pattern", "EXPRESS",
+				UUID.randomUUID(), line.getId(), "upsert-pattern", "EXPRESS",
 				upsertedPatternValidFrom, LocalDate.parse("2026-12-31"), false, null, null));
 
 		assertThat(jdbcTemplate.queryForObject(
 				"SELECT COUNT(*) FROM stop_pattern "
 						+ "WHERE line_id = ? AND provider_pattern_id = ? AND valid_from = ?",
-				Integer.class, line.id(), "upsert-pattern", upsertedPatternValidFrom))
+				Integer.class, line.getId(), "upsert-pattern", upsertedPatternValidFrom))
 				.isEqualTo(1);
 		assertThat(jdbcTemplate.queryForMap(
 				"SELECT id, service_type, valid_to, active FROM stop_pattern "
 						+ "WHERE line_id = ? AND provider_pattern_id = ? AND valid_from = ?",
-				line.id(), "upsert-pattern", upsertedPatternValidFrom))
+				line.getId(), "upsert-pattern", upsertedPatternValidFrom))
 				.containsEntry("id", upsertedPatternId)
 				.containsEntry("service_type", "EXPRESS")
 				.containsEntry("valid_to", java.sql.Date.valueOf("2026-12-31"))
 				.containsEntry("active", false);
 		assertThat(stopPatternMapper.findStopPatternByBusinessKey(
-				line.id(), "upsert-pattern", upsertedPatternValidFrom))
+				line.getId(), "upsert-pattern", upsertedPatternValidFrom))
 				.get()
 				.satisfies(pattern -> {
-					assertThat(pattern.id()).isEqualTo(upsertedPatternId);
-					assertThat(pattern.serviceType()).isEqualTo("EXPRESS");
-					assertThat(pattern.active()).isFalse();
+					assertThat(pattern.getId()).isEqualTo(upsertedPatternId);
+					assertThat(pattern.getServiceType()).isEqualTo("EXPRESS");
+					assertThat(pattern.getActive()).isFalse();
 				});
 		assertThat(stopPatternMapper.findStopPatternByBusinessKey(
-				line.id(), "missing-pattern", upsertedPatternValidFrom))
+				line.getId(), "missing-pattern", upsertedPatternValidFrom))
 				.isEmpty();
 
-		UUID batchPatternId = insertStopPattern(line.id(), "batch-pattern", "LOCAL",
+		UUID batchPatternId = insertStopPattern(line.getId(), "batch-pattern", "LOCAL",
 				LocalDate.parse("2026-08-31"), null, true);
 		stopPatternMapper.upsertStopPatternStops(List.of(
-				new StopPatternStopEntity(batchPatternId, 1, stop.id(), true, false),
-				new StopPatternStopEntity(batchPatternId, 2, destinationStop.id(), false, true)));
+				new StopPatternStopEntity(batchPatternId, 1, stop.getId(), true, false),
+				new StopPatternStopEntity(batchPatternId, 2, destinationStop.getId(), false, true)));
 		assertThat(jdbcTemplate.queryForObject(
 				"SELECT COUNT(*) FROM stop_pattern_stop WHERE stop_pattern_id = ?",
 				Integer.class, batchPatternId))
 				.isEqualTo(2);
 
 		stopPatternMapper.upsertStopPatternStops(List.of(
-				new StopPatternStopEntity(batchPatternId, 2, stop.id(), true, true)));
+				new StopPatternStopEntity(batchPatternId, 2, stop.getId(), true, true)));
 		assertThat(jdbcTemplate.queryForMap(
 				"SELECT stop_id, pickup_allowed, dropoff_allowed FROM stop_pattern_stop "
 						+ "WHERE stop_pattern_id = ? AND stop_sequence = ?",
 				batchPatternId, 2))
-				.containsEntry("stop_id", stop.id())
+				.containsEntry("stop_id", stop.getId())
 				.containsEntry("pickup_allowed", true)
 				.containsEntry("dropoff_allowed", true);
 		assertThat(stopPatternMapper.findStopsByStopPatternId(batchPatternId))
 				.satisfiesExactly(
 						firstStop -> {
-							assertThat(firstStop.stopSequence()).isEqualTo(1);
-							assertThat(firstStop.stopId()).isEqualTo(stop.id());
-							assertThat(firstStop.stopName()).isEqualTo("테스트 정류장");
-							assertThat(firstStop.pickupAllowed()).isTrue();
-							assertThat(firstStop.dropoffAllowed()).isFalse();
+							assertThat(firstStop.getStopSequence()).isEqualTo(1);
+							assertThat(firstStop.getStopId()).isEqualTo(stop.getId());
+							assertThat(firstStop.getStopName()).isEqualTo("테스트 정류장");
+							assertThat(firstStop.getPickupAllowed()).isTrue();
+							assertThat(firstStop.getDropoffAllowed()).isFalse();
 						},
 						secondStop -> {
-							assertThat(secondStop.stopSequence()).isEqualTo(2);
-							assertThat(secondStop.stopId()).isEqualTo(stop.id());
-							assertThat(secondStop.stopName()).isEqualTo("테스트 정류장");
-							assertThat(secondStop.pickupAllowed()).isTrue();
-							assertThat(secondStop.dropoffAllowed()).isTrue();
+							assertThat(secondStop.getStopSequence()).isEqualTo(2);
+							assertThat(secondStop.getStopId()).isEqualTo(stop.getId());
+							assertThat(secondStop.getStopName()).isEqualTo("테스트 정류장");
+							assertThat(secondStop.getPickupAllowed()).isTrue();
+							assertThat(secondStop.getDropoffAllowed()).isTrue();
 						});
 
 		stopPatternMapper.upsertStopPatternStops(List.of(
-				new StopPatternStopEntity(batchPatternId, 3, destinationStop.id(), true, true)));
-		UUID otherPatternId = insertStopPattern(line.id(), "other-delete-pattern", "LOCAL",
+				new StopPatternStopEntity(batchPatternId, 3, destinationStop.getId(), true, true)));
+		UUID otherPatternId = insertStopPattern(line.getId(), "other-delete-pattern", "LOCAL",
 				LocalDate.parse("2026-09-02"), null, true);
 		stopPatternMapper.upsertStopPatternStops(List.of(
-				new StopPatternStopEntity(otherPatternId, 1, destinationStop.id(), true, true)));
+				new StopPatternStopEntity(otherPatternId, 1, destinationStop.getId(), true, true)));
 
 		assertThat(stopPatternMapper.deleteStopPatternStopsNotInSequences(batchPatternId, List.of(1, 2)))
 				.isEqualTo(1);
@@ -546,33 +546,33 @@ class TransitLineMapperIntegrationTest {
 				true, sourceUpdatedAt, null, null);
 		transitLineMapper.upsertTransitLine(patternSyncLine);
 		LocalDate retainedValidFrom = LocalDate.parse("2026-09-01");
-		insertStopPattern(patternSyncLine.id(), "weekday", "LOCAL", retainedValidFrom, null, true);
-		insertStopPattern(patternSyncLine.id(), "weekday", "LOCAL",
+		insertStopPattern(patternSyncLine.getId(), "weekday", "LOCAL", retainedValidFrom, null, true);
+		insertStopPattern(patternSyncLine.getId(), "weekday", "LOCAL",
 				LocalDate.parse("2026-10-01"), null, true);
-		insertStopPattern(patternSyncLine.id(), "weekend", "LOCAL", retainedValidFrom, null, true);
+		insertStopPattern(patternSyncLine.getId(), "weekend", "LOCAL", retainedValidFrom, null, true);
 
 		assertThat(stopPatternMapper.deactivateStopPatternsNotInBusinessKeys(
-				patternSyncLine.id(),
+				patternSyncLine.getId(),
 				List.of(new StopPatternEntity(
-						null, patternSyncLine.id(), "weekday", "LOCAL", retainedValidFrom,
+						null, patternSyncLine.getId(), "weekday", "LOCAL", retainedValidFrom,
 						null, true, null, null))))
 				.isEqualTo(2);
 		assertThat(jdbcTemplate.queryForObject(
 				"SELECT active FROM stop_pattern "
 						+ "WHERE line_id = ? AND provider_pattern_id = ? AND valid_from = ?",
-				Boolean.class, patternSyncLine.id(), "weekday", retainedValidFrom))
+				Boolean.class, patternSyncLine.getId(), "weekday", retainedValidFrom))
 				.isTrue();
 		assertThat(jdbcTemplate.queryForObject(
 				"SELECT active FROM stop_pattern "
 						+ "WHERE line_id = ? AND provider_pattern_id = ? AND valid_from = ?",
-				Boolean.class, patternSyncLine.id(), "weekday", LocalDate.parse("2026-10-01")))
+				Boolean.class, patternSyncLine.getId(), "weekday", LocalDate.parse("2026-10-01")))
 				.isFalse();
 		assertThat(stopPatternMapper.deactivateStopPatternsNotInBusinessKeys(
-				patternSyncLine.id(), List.of()))
+				patternSyncLine.getId(), List.of()))
 				.isEqualTo(1);
 
-		long subwayProviderId = transitProviderMapper.findByCode("SEOUL_SUBWAY").orElseThrow().id();
-		long nationalProviderId = transitProviderMapper.findByCode("NATIONAL_PRECISION_BUS").orElseThrow().id();
+		long subwayProviderId = transitProviderMapper.findByCode("SEOUL_SUBWAY").orElseThrow().getId();
+		long nationalProviderId = transitProviderMapper.findByCode("NATIONAL_PRECISION_BUS").orElseThrow().getId();
 		for (String providerLineId : List.of("sync-line-1", "sync-line-2", "sync-line-3")) {
 			transitLineMapper.upsertTransitLine(new TransitLineEntity(
 					UUID.randomUUID(), subwayProviderId, providerLineId, providerLineId,
@@ -587,11 +587,11 @@ class TransitLineMapperIntegrationTest {
 				subwayProviderId, List.of("sync-line-1")))
 				.isEqualTo(2);
 		assertThat(transitLineMapper.findByProviderResourceId(subwayProviderId, "sync-line-1"))
-				.get().extracting(TransitLineEntity::active).isEqualTo(true);
+				.get().extracting(TransitLineEntity::getActive).isEqualTo(true);
 		assertThat(transitLineMapper.findByProviderResourceId(subwayProviderId, "sync-line-2"))
-				.get().extracting(TransitLineEntity::active).isEqualTo(false);
+				.get().extracting(TransitLineEntity::getActive).isEqualTo(false);
 		assertThat(transitLineMapper.findByProviderResourceId(nationalProviderId, "other-provider-line"))
-				.get().extracting(TransitLineEntity::active).isEqualTo(true);
+				.get().extracting(TransitLineEntity::getActive).isEqualTo(true);
 		assertThat(transitLineMapper.deactivateTransitLinesNotInProviderLineIds(
 				subwayProviderId, List.of()))
 				.isEqualTo(1);
@@ -613,3 +613,4 @@ class TransitLineMapperIntegrationTest {
 		return patternId;
 	}
 }
+

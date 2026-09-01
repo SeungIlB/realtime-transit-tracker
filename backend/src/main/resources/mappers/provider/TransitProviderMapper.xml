@@ -4,15 +4,15 @@
         "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.realtimetransit.backend.provider.repository.TransitProviderMapper">
     <resultMap id="transitProviderRowMap" type="TransitProviderEntity">
-        <constructor>
-            <idArg column="id" javaType="java.lang.Long" />
-            <arg column="code" javaType="string" />
-            <arg column="display_name" javaType="string" />
-            <arg column="transport_type" javaType="string" />
-            <arg column="active" javaType="java.lang.Boolean" />
-            <arg column="created_at" javaType="java.time.Instant" />
-            <arg column="updated_at" javaType="java.time.Instant" />
-        </constructor>
+        
+            <id property="id" column="id" />
+            <result property="code" column="code" />
+            <result property="displayName" column="display_name" />
+            <result property="transportType" column="transport_type" />
+            <result property="active" column="active" />
+            <result property="createdAt" column="created_at" />
+            <result property="updatedAt" column="updated_at" />
+        
     </resultMap>
 
     <sql id="transitProviderColumns">
@@ -39,3 +39,4 @@
         ORDER BY id ASC
     </select>
 </mapper>
+

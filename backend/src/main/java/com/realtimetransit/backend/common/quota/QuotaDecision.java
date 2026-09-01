@@ -2,5 +2,19 @@ package com.realtimetransit.backend.common.quota;
 
 import java.time.Instant;
 
-public record QuotaDecision(boolean allowed, long remaining, Instant resetsAt) {
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+@Getter
+@Setter
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class QuotaDecision {
+	private boolean allowed;
+	private long remaining;
+	private Instant resetsAt;
 }

@@ -4,20 +4,20 @@
         "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.realtimetransit.backend.provider.repository.ArrivalPredictionObservationMapper">
     <resultMap id="arrivalPredictionObservationMap" type="ArrivalPredictionObservationEntity">
-        <constructor>
-            <idArg column="id" javaType="java.lang.Long" />
-            <arg column="raw_observation_id" javaType="java.lang.Long" />
-            <arg column="vehicle_run_observation_id" javaType="java.lang.Long" />
-            <arg column="boarding_stop_id" javaType="java.util.UUID" />
-            <arg column="expected_at" javaType="java.time.Instant" />
-            <arg column="min_expected_at" javaType="java.time.Instant" />
-            <arg column="max_expected_at" javaType="java.time.Instant" />
-            <arg column="remaining_stops" javaType="java.lang.Integer" />
-            <arg column="source" javaType="java.lang.String" />
-            <arg column="confidence" javaType="java.lang.String" />
-            <arg column="observed_at" javaType="java.time.Instant" />
-            <arg column="received_at" javaType="java.time.Instant" />
-        </constructor>
+        
+            <id property="id" column="id" />
+            <result property="rawObservationId" column="raw_observation_id" />
+            <result property="vehicleRunObservationId" column="vehicle_run_observation_id" />
+            <result property="boardingStopId" column="boarding_stop_id" />
+            <result property="expectedAt" column="expected_at" />
+            <result property="minExpectedAt" column="min_expected_at" />
+            <result property="maxExpectedAt" column="max_expected_at" />
+            <result property="remainingStops" column="remaining_stops" />
+            <result property="source" column="source" />
+            <result property="confidence" column="confidence" />
+            <result property="observedAt" column="observed_at" />
+            <result property="receivedAt" column="received_at" />
+        
     </resultMap>
 
     <sql id="arrivalPredictionObservationColumns">
@@ -50,3 +50,4 @@
         )
     </delete>
 </mapper>
+

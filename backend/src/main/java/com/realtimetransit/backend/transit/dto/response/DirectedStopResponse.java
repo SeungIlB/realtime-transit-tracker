@@ -1,31 +1,44 @@
 package com.realtimetransit.backend.transit.dto.response;
 
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
 import java.math.BigDecimal;
 import java.util.UUID;
 
 import com.realtimetransit.backend.transit.entity.DirectedStopEntity;
 
-public record DirectedStopResponse(
-		UUID directionId,
-		String directionName,
-		UUID stopId,
-		String stopName,
-		Integer stopSequence,
-		BigDecimal latitude,
-		BigDecimal longitude,
-		UUID nextStopId,
-		String displayDirection) {
+@Getter
+@Setter
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class DirectedStopResponse {
+	private UUID directionId;
+	private String directionName;
+	private UUID stopId;
+	private String stopName;
+	private Integer stopSequence;
+	private BigDecimal latitude;
+	private BigDecimal longitude;
+	private UUID nextStopId;
+	private String displayDirection;
 
 	public static DirectedStopResponse from(DirectedStopEntity entity) {
 		return new DirectedStopResponse(
-				entity.directionId(),
-				entity.directionName(),
-				entity.stopId(),
-				entity.stopName(),
-				entity.stopSequence(),
-				entity.latitude(),
-				entity.longitude(),
-				entity.nextStopId(),
-				entity.displayDirection());
+				entity.getDirectionId(),
+				entity.getDirectionName(),
+				entity.getStopId(),
+				entity.getStopName(),
+				entity.getStopSequence(),
+				entity.getLatitude(),
+				entity.getLongitude(),
+				entity.getNextStopId(),
+				entity.getDisplayDirection());
 	}
 }
+
+

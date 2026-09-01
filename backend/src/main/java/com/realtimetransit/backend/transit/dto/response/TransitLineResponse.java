@@ -1,22 +1,35 @@
 package com.realtimetransit.backend.transit.dto.response;
 
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
 import java.util.UUID;
 
 import com.realtimetransit.backend.transit.entity.TransitLineEntity;
 
-public record TransitLineResponse(
-		UUID id,
-		String providerLineId,
-		String publicName,
-		String operatorName,
-		String routeType) {
+@Getter
+@Setter
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class TransitLineResponse {
+	private UUID id;
+	private String providerLineId;
+	private String publicName;
+	private String operatorName;
+	private String routeType;
 
 	public static TransitLineResponse from(TransitLineEntity line) {
 		return new TransitLineResponse(
-				line.id(),
-				line.providerLineId(),
-				line.publicName(),
-				line.operatorName(),
-				line.routeType());
+				line.getId(),
+				line.getProviderLineId(),
+				line.getPublicName(),
+				line.getOperatorName(),
+				line.getRouteType());
 	}
 }
+
+

@@ -37,7 +37,7 @@ class TransitProviderMapperIntegrationTest {
 	void readsProvidersInsertedByFlyway() {
 		var providers = transitProviderMapper.findAll();
 
-		assertThat(providers).extracting(provider -> provider.code())
+		assertThat(providers).extracting(provider -> provider.getCode())
 				.containsExactly("GBIS", "NATIONAL_PRECISION_BUS", "SEOUL_SUBWAY");
 		assertThat(transitProviderMapper.findByCode("GBIS")).isPresent();
 	}
@@ -52,16 +52,16 @@ class TransitProviderMapperIntegrationTest {
 
 		var activeProviders = transitProviderMapper.findAllActive();
 		assertThat(activeProviders)
-				.extracting(provider -> provider.code())
+				.extracting(provider -> provider.getCode())
 				.containsExactly("GBIS", "NATIONAL_PRECISION_BUS", "SEOUL_SUBWAY");
 		assertThat(activeProviders)
-				.extracting(provider -> provider.id())
+				.extracting(provider -> provider.getId())
 				.isSorted();
 	}
 
 	@Test
 	void insertsRawObservationAndReturnsGeneratedId() {
-		long providerId = transitProviderMapper.findByCode("GBIS").orElseThrow().id();
+		long providerId = transitProviderMapper.findByCode("GBIS").orElseThrow().getId();
 		Instant receivedAt = Instant.parse("2026-08-31T01:00:00Z");
 		long observationId = rawObservationMapper.insertRawObservation(new RawObservationEntity(
 				null,
@@ -97,9 +97,9 @@ class TransitProviderMapperIntegrationTest {
 
 	@Test
 	void findsLatestRawObservationByRequestIdentity() {
-		long gbisProviderId = transitProviderMapper.findByCode("GBIS").orElseThrow().id();
+		long gbisProviderId = transitProviderMapper.findByCode("GBIS").orElseThrow().getId();
 		long nationalProviderId = transitProviderMapper.findByCode("NATIONAL_PRECISION_BUS")
-				.orElseThrow().id();
+				.orElseThrow().getId();
 		Instant receivedAt = Instant.parse("2026-08-31T02:00:00Z");
 
 		rawObservationMapper.insertRawObservation(new RawObservationEntity(
@@ -122,9 +122,9 @@ class TransitProviderMapperIntegrationTest {
 				gbisProviderId, "/latest-test", "route-1:stop-1"))
 				.get()
 				.satisfies(observation -> {
-					assertThat(observation.id()).isEqualTo(latestId);
-					assertThat(observation.responseStatus()).isEqualTo(503);
-					assertThat(observation.payload()).contains("failure");
+					assertThat(observation.getId()).isEqualTo(latestId);
+					assertThat(observation.getResponseStatus()).isEqualTo(503);
+					assertThat(observation.getPayload()).contains("failure");
 				});
 		assertThat(rawObservationMapper.findLatestByProviderIdAndEndpointAndRequestKey(
 				gbisProviderId, "/latest-test", "missing-request"))
@@ -133,7 +133,7 @@ class TransitProviderMapperIntegrationTest {
 
 	@Test
 	void findsLatestSuccessfulUnexpiredRawObservationForFallback() {
-		long providerId = transitProviderMapper.findByCode("GBIS").orElseThrow().id();
+		long providerId = transitProviderMapper.findByCode("GBIS").orElseThrow().getId();
 		Instant asOf = Instant.parse("2026-08-31T03:00:00Z");
 		String endpoint = "/fallback-test";
 		String requestKey = "route-2:stop-3";
@@ -155,9 +155,9 @@ class TransitProviderMapperIntegrationTest {
 				providerId, endpoint, requestKey, asOf))
 				.get()
 				.satisfies(observation -> {
-					assertThat(observation.id()).isEqualTo(usableObservationId);
-					assertThat(observation.responseStatus()).isEqualTo(299);
-					assertThat(observation.payload()).contains("usable");
+					assertThat(observation.getId()).isEqualTo(usableObservationId);
+					assertThat(observation.getResponseStatus()).isEqualTo(299);
+					assertThat(observation.getPayload()).contains("usable");
 				});
 		assertThat(rawObservationMapper.findLatestSuccessfulUnexpiredByRequestIdentity(
 				providerId, endpoint, "missing-request", asOf))
@@ -167,9 +167,9 @@ class TransitProviderMapperIntegrationTest {
 	@Test
 	@Transactional
 	void aggregatesCollectionStatusesByProviderAndEndpoint() {
-		long gbisProviderId = transitProviderMapper.findByCode("GBIS").orElseThrow().id();
+		long gbisProviderId = transitProviderMapper.findByCode("GBIS").orElseThrow().getId();
 		long nationalProviderId = transitProviderMapper.findByCode("NATIONAL_PRECISION_BUS")
-				.orElseThrow().id();
+				.orElseThrow().getId();
 		Instant receivedAfter = Instant.parse("2030-01-01T00:00:00Z");
 
 		for (int index = 0; index < 4; index++) {
@@ -188,23 +188,24 @@ class TransitProviderMapperIntegrationTest {
 		assertThat(rawObservationMapper.findCollectionStatusesReceivedAfter(receivedAfter))
 				.satisfiesExactly(
 						gbisFirstEndpoint -> {
-							assertThat(gbisFirstEndpoint.providerCode()).isEqualTo("GBIS");
-							assertThat(gbisFirstEndpoint.endpoint()).isEqualTo("/collect-a");
-							assertThat(gbisFirstEndpoint.totalCalls()).isEqualTo(4);
-							assertThat(gbisFirstEndpoint.successfulCalls()).isEqualTo(2);
-							assertThat(gbisFirstEndpoint.failedCalls()).isEqualTo(2);
-							assertThat(gbisFirstEndpoint.latestReceivedAt())
+							assertThat(gbisFirstEndpoint.getProviderCode()).isEqualTo("GBIS");
+							assertThat(gbisFirstEndpoint.getEndpoint()).isEqualTo("/collect-a");
+							assertThat(gbisFirstEndpoint.getTotalCalls()).isEqualTo(4);
+							assertThat(gbisFirstEndpoint.getSuccessfulCalls()).isEqualTo(2);
+							assertThat(gbisFirstEndpoint.getFailedCalls()).isEqualTo(2);
+							assertThat(gbisFirstEndpoint.getLatestReceivedAt())
 									.isEqualTo(receivedAfter.plusSeconds(3));
 						},
 						gbisSecondEndpoint -> {
-							assertThat(gbisSecondEndpoint.providerCode()).isEqualTo("GBIS");
-							assertThat(gbisSecondEndpoint.endpoint()).isEqualTo("/collect-b");
-							assertThat(gbisSecondEndpoint.successfulCalls()).isEqualTo(1);
+							assertThat(gbisSecondEndpoint.getProviderCode()).isEqualTo("GBIS");
+							assertThat(gbisSecondEndpoint.getEndpoint()).isEqualTo("/collect-b");
+							assertThat(gbisSecondEndpoint.getSuccessfulCalls()).isEqualTo(1);
 						},
 						nationalEndpoint -> {
-							assertThat(nationalEndpoint.providerCode()).isEqualTo("NATIONAL_PRECISION_BUS");
-							assertThat(nationalEndpoint.endpoint()).isEqualTo("/collect-a");
-							assertThat(nationalEndpoint.failedCalls()).isEqualTo(1);
+							assertThat(nationalEndpoint.getProviderCode()).isEqualTo("NATIONAL_PRECISION_BUS");
+							assertThat(nationalEndpoint.getEndpoint()).isEqualTo("/collect-a");
+							assertThat(nationalEndpoint.getFailedCalls()).isEqualTo(1);
 						});
 	}
 }
+
