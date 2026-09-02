@@ -15,6 +15,9 @@ public enum ErrorCode {
 	UNSUPPORTED_PROVIDER(HttpStatus.BAD_REQUEST, "UNSUPPORTED_PROVIDER", "Transit provider is not supported"),
 	INVALID_CONFIGURATION(HttpStatus.INTERNAL_SERVER_ERROR, "INVALID_CONFIGURATION", "Application configuration is invalid"),
 	EXTERNAL_STORAGE_ERROR(HttpStatus.SERVICE_UNAVAILABLE, "EXTERNAL_STORAGE_ERROR", "External storage operation failed"),
+	EXTERNAL_API_ERROR(HttpStatus.BAD_GATEWAY, "EXTERNAL_API_ERROR", "External transit API request failed"),
+	EXTERNAL_API_AUTHENTICATION_FAILED(HttpStatus.BAD_GATEWAY, "EXTERNAL_API_AUTHENTICATION_FAILED", "External transit API authentication failed"),
+	EXTERNAL_API_QUOTA_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "EXTERNAL_API_QUOTA_EXCEEDED", "External transit API quota was exhausted"),
 	INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR", "An unexpected error occurred");
 
 	private final HttpStatus status;
