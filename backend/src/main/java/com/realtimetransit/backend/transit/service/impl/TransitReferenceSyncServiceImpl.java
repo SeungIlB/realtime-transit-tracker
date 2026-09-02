@@ -1,5 +1,6 @@
 package com.realtimetransit.backend.transit.service.impl;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -13,14 +14,19 @@ import com.realtimetransit.backend.common.error.ErrorCode;
 import com.realtimetransit.backend.transit.dto.request.TransitLineSyncRequest;
 import com.realtimetransit.backend.transit.dto.request.TransitStopSyncRequest;
 import com.realtimetransit.backend.transit.dto.request.RouteDirectionSyncRequest;
+import com.realtimetransit.backend.transit.dto.request.StopPatternSyncRequest;
+import com.realtimetransit.backend.transit.dto.response.StopPatternSyncKey;
+import com.realtimetransit.backend.transit.entity.DirectedStopAssignmentEntity;
+import com.realtimetransit.backend.transit.entity.RouteDirectionEntity;
+import com.realtimetransit.backend.transit.entity.StopPatternEntity;
+import com.realtimetransit.backend.transit.entity.StopPatternStopEntity;
 import com.realtimetransit.backend.transit.entity.TransitLineEntity;
 import com.realtimetransit.backend.transit.entity.TransitStopEntity;
-import com.realtimetransit.backend.transit.entity.RouteDirectionEntity;
-import com.realtimetransit.backend.transit.entity.DirectedStopAssignmentEntity;
 import com.realtimetransit.backend.transit.repository.TransitLineMapper;
 import com.realtimetransit.backend.transit.repository.TransitStopMapper;
 import com.realtimetransit.backend.transit.repository.RouteDirectionMapper;
 import com.realtimetransit.backend.transit.repository.DirectedStopMapper;
+import com.realtimetransit.backend.transit.repository.StopPatternMapper;
 import com.realtimetransit.backend.transit.service.TransitReferenceSyncService;
 import com.realtimetransit.backend.transit.service.validation.TransitReferenceSyncValidator;
 
@@ -35,6 +41,7 @@ public class TransitReferenceSyncServiceImpl implements TransitReferenceSyncServ
 	private final TransitStopMapper transitStopMapper;
 	private final RouteDirectionMapper routeDirectionMapper;
 	private final DirectedStopMapper directedStopMapper;
+	private final StopPatternMapper stopPatternMapper;
 	private final TransitReferenceSyncValidator referenceSyncValidator;
 
 	@Override
@@ -154,6 +161,98 @@ public class TransitReferenceSyncServiceImpl implements TransitReferenceSyncServ
 		return Map.copyOf(directionIdsByProviderDirectionId);
 	}
 
+	@Override
+	public Map<StopPatternSyncKey, UUID> synchronizeStopPatterns(
+			UUID lineId,
+			Map<String, UUID> stopIdsByProviderStopId,
+			List<StopPatternSyncRequest> patterns) {
+		referenceSyncValidator.validateStopPatterns(lineId, stopIdsByProviderStopId, patterns);
+
+		Map<StopPatternSyncKey, UUID> patternIdsByBusinessKey = new LinkedHashMap<>();
+		List<StopPatternEntity> retainedPatterns = new ArrayList<>();
+		for (StopPatternSyncRequest pattern : patterns) {
+			StopPatternEntity patternEntity = createStopPatternEntity(lineId, pattern);
+			UUID actualPatternId = synchronizeStopPattern(
+					patternEntity, pattern, stopIdsByProviderStopId);
+
+			patternIdsByBusinessKey.put(createStopPatternKey(pattern), actualPatternId);
+			retainedPatterns.add(patternEntity);
+		}
+
+		deactivateMissingStopPatterns(lineId, retainedPatterns);
+		return Map.copyOf(patternIdsByBusinessKey);
+	}
+
+	private UUID synchronizeStopPattern(
+			StopPatternEntity patternEntity,
+			StopPatternSyncRequest pattern,
+			Map<String, UUID> stopIdsByProviderStopId) {
+		stopPatternMapper.upsertStopPattern(patternEntity);
+		UUID actualPatternId = findActualStopPatternId(patternEntity);
+		synchronizeStopPatternStops(actualPatternId, pattern, stopIdsByProviderStopId);
+		return actualPatternId;
+	}
+
+	private StopPatternEntity createStopPatternEntity(
+			UUID lineId,
+			StopPatternSyncRequest pattern) {
+		return StopPatternEntity.builder()
+				.id(UUID.randomUUID())
+				.lineId(lineId)
+				.providerPatternId(pattern.getProviderPatternId())
+				.serviceType(pattern.getServiceType())
+				.validFrom(pattern.getValidFrom())
+				.validTo(pattern.getValidTo())
+				.active(pattern.getActive())
+				.build();
+	}
+
+	private UUID findActualStopPatternId(StopPatternEntity pattern) {
+		return stopPatternMapper.findStopPatternByBusinessKey(
+				pattern.getLineId(),
+				pattern.getProviderPatternId(),
+				pattern.getValidFrom())
+				.orElseThrow(() -> new BusinessException(
+						ErrorCode.SYNC_RESULT_NOT_FOUND,
+						pattern.getProviderPatternId() + ":" + pattern.getValidFrom()))
+				.getId();
+	}
+
+	private void synchronizeStopPatternStops(
+			UUID stopPatternId,
+			StopPatternSyncRequest pattern,
+			Map<String, UUID> stopIdsByProviderStopId) {
+		List<StopPatternStopEntity> patternStops = pattern.getPatternStops().stream()
+				.map(stop -> StopPatternStopEntity.builder()
+						.stopPatternId(stopPatternId)
+						.stopSequence(stop.getStopSequence())
+						.stopId(stopIdsByProviderStopId.get(stop.getProviderStopId()))
+						.pickupAllowed(stop.getPickupAllowed())
+						.dropoffAllowed(stop.getDropoffAllowed())
+						.build())
+				.toList();
+
+		if (!patternStops.isEmpty()) {
+			stopPatternMapper.upsertStopPatternStops(patternStops);
+		}
+		stopPatternMapper.deleteStopPatternStopsNotInSequences(
+				stopPatternId,
+				patternStops.stream().map(StopPatternStopEntity::getStopSequence).toList());
+	}
+
+	private StopPatternSyncKey createStopPatternKey(StopPatternSyncRequest pattern) {
+		return StopPatternSyncKey.builder()
+				.providerPatternId(pattern.getProviderPatternId())
+				.validFrom(pattern.getValidFrom())
+				.build();
+	}
+
+	private void deactivateMissingStopPatterns(
+			UUID lineId,
+			List<StopPatternEntity> retainedPatterns) {
+		stopPatternMapper.deactivateStopPatternsNotInBusinessKeys(lineId, retainedPatterns);
+	}
+
 	private static UUID resolveStopId(Map<String, UUID> stopIds, String providerStopId) {
 		return providerStopId == null ? null : stopIds.get(providerStopId);
 	}
@@ -177,4 +276,3 @@ public class TransitReferenceSyncServiceImpl implements TransitReferenceSyncServ
 	}
 
 }
-

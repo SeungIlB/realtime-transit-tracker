@@ -14,6 +14,9 @@ import com.realtimetransit.backend.transit.dto.request.DirectedStopSyncRequest;
 import com.realtimetransit.backend.transit.dto.request.RouteDirectionSyncRequest;
 import com.realtimetransit.backend.transit.dto.request.TransitLineSyncRequest;
 import com.realtimetransit.backend.transit.dto.request.TransitStopSyncRequest;
+import com.realtimetransit.backend.transit.dto.request.StopPatternSyncRequest;
+import com.realtimetransit.backend.transit.dto.request.StopPatternStopSyncRequest;
+import com.realtimetransit.backend.transit.dto.response.StopPatternSyncKey;
 
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
@@ -83,6 +86,35 @@ public class TransitReferenceSyncValidator {
 				}
 				validateStopReference(stopIdsByProviderStopId, stop.getProviderStopId());
 				validateStopReference(stopIdsByProviderStopId, stop.getNextProviderStopId());
+			}
+		}
+	}
+
+	public void validateStopPatterns(
+			UUID lineId,
+			Map<String, UUID> stopIdsByProviderStopId,
+			List<StopPatternSyncRequest> patterns) {
+		if (lineId == null) {
+			throw new BusinessException(ErrorCode.INVALID_REQUEST, "lineId must not be null");
+		}
+		if (stopIdsByProviderStopId == null) {
+			throw new BusinessException(ErrorCode.INVALID_REQUEST, "stopIdsByProviderStopId must not be null");
+		}
+		validateList(patterns, "patterns");
+		Set<StopPatternSyncKey> patternKeys = new HashSet<>();
+		for (StopPatternSyncRequest pattern : patterns) {
+			validateBean(pattern, "pattern");
+			StopPatternSyncKey key = new StopPatternSyncKey(
+					pattern.getProviderPatternId(), pattern.getValidFrom());
+			addUnique(patternKeys, key, "stopPattern business key");
+			if (pattern.getValidTo() != null && pattern.getValidTo().isBefore(pattern.getValidFrom())) {
+				throw new BusinessException(ErrorCode.INVALID_REQUEST, "validTo must not be before validFrom");
+			}
+			Set<Integer> sequences = new HashSet<>();
+			for (StopPatternStopSyncRequest stop : pattern.getPatternStops()) {
+				validateBean(stop, "patternStop");
+				addUnique(sequences, stop.getStopSequence(), "stopSequence");
+				validateStopReference(stopIdsByProviderStopId, stop.getProviderStopId());
 			}
 		}
 	}

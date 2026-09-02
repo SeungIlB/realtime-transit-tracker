@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -23,12 +24,17 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.realtimetransit.backend.transit.dto.request.TransitLineSyncRequest;
 import com.realtimetransit.backend.transit.dto.request.TransitStopSyncRequest;
+import com.realtimetransit.backend.transit.dto.request.StopPatternStopSyncRequest;
+import com.realtimetransit.backend.transit.dto.request.StopPatternSyncRequest;
+import com.realtimetransit.backend.transit.dto.response.StopPatternSyncKey;
 import com.realtimetransit.backend.common.error.BusinessException;
 import com.realtimetransit.backend.common.error.ErrorCode;
 import com.realtimetransit.backend.transit.entity.TransitLineEntity;
 import com.realtimetransit.backend.transit.entity.TransitStopEntity;
+import com.realtimetransit.backend.transit.entity.StopPatternEntity;
 import com.realtimetransit.backend.transit.repository.TransitLineMapper;
 import com.realtimetransit.backend.transit.repository.TransitStopMapper;
+import com.realtimetransit.backend.transit.repository.StopPatternMapper;
 import com.realtimetransit.backend.transit.service.validation.TransitReferenceSyncValidator;
 
 @ExtendWith(MockitoExtension.class)
@@ -39,6 +45,9 @@ class TransitReferenceSyncServiceImplTest {
 
 	@Mock
 	private TransitStopMapper transitStopMapper;
+
+	@Mock
+	private StopPatternMapper stopPatternMapper;
 
 	@Mock
 	private TransitReferenceSyncValidator referenceSyncValidator;
@@ -132,6 +141,31 @@ class TransitReferenceSyncServiceImplTest {
 			assertThat(entity.getId()).isEqualTo(childId);
 			assertThat(entity.getParentStationId()).isEqualTo(parentId);
 		});
+	}
+
+	@Test
+	void synchronizesStopPatternsAndTheirStops() {
+		UUID lineId = UUID.randomUUID();
+		UUID stopId = UUID.randomUUID();
+		UUID actualPatternId = UUID.randomUUID();
+		LocalDate validFrom = LocalDate.of(2026, 9, 1);
+		var patternStop = new StopPatternStopSyncRequest("stop-1", 1, true, true);
+		var pattern = new StopPatternSyncRequest(
+				"weekday", "LOCAL", validFrom, null, true, List.of(patternStop));
+		when(stopPatternMapper.findStopPatternByBusinessKey(lineId, "weekday", validFrom))
+				.thenReturn(Optional.of(StopPatternEntity.builder().id(actualPatternId).build()));
+
+		assertThat(syncService.synchronizeStopPatterns(
+				lineId,
+				java.util.Map.of("stop-1", stopId),
+				List.of(pattern)))
+				.containsEntry(new StopPatternSyncKey("weekday", validFrom), actualPatternId);
+
+		verify(stopPatternMapper).upsertStopPattern(any(StopPatternEntity.class));
+		verify(stopPatternMapper).upsertStopPatternStops(any());
+		verify(stopPatternMapper).deleteStopPatternStopsNotInSequences(actualPatternId, List.of(1));
+		verify(stopPatternMapper).deactivateStopPatternsNotInBusinessKeys(
+				org.mockito.ArgumentMatchers.eq(lineId), any());
 	}
 }
 

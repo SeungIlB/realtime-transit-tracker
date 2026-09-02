@@ -7,6 +7,8 @@ import java.util.UUID;
 import com.realtimetransit.backend.transit.dto.request.TransitLineSyncRequest;
 import com.realtimetransit.backend.transit.dto.request.TransitStopSyncRequest;
 import com.realtimetransit.backend.transit.dto.request.RouteDirectionSyncRequest;
+import com.realtimetransit.backend.transit.dto.request.StopPatternSyncRequest;
+import com.realtimetransit.backend.transit.dto.response.StopPatternSyncKey;
 
 public interface TransitReferenceSyncService {
 
@@ -22,4 +24,9 @@ public interface TransitReferenceSyncService {
 			UUID lineId,
 			Map<String, UUID> stopIdsByProviderStopId,
 			List<RouteDirectionSyncRequest> directions);
+
+	Map<StopPatternSyncKey, UUID> synchronizeStopPatterns(
+			UUID lineId,
+			Map<String, UUID> stopIdsByProviderStopId,
+			List<StopPatternSyncRequest> patterns);
 }
