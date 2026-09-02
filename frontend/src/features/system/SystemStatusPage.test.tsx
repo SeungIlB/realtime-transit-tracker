@@ -23,7 +23,12 @@ describe('SystemStatusPage', () => {
   it('shows the connected state when the backend is healthy', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(
-        JSON.stringify({ status: 'UP', checkedAt: '2026-08-27T00:00:00Z' }),
+        JSON.stringify({
+          success: true,
+          code: 'SUCCESS',
+          message: 'Success',
+          data: { status: 'UP', checkedAt: '2026-08-27T00:00:00Z' },
+        }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
       ),
     )

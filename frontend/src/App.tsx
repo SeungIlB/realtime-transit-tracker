@@ -1,11 +1,11 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
-import { SystemStatusPage } from './features/system/SystemStatusPage'
+import { TransitJourneyPage } from './features/journey/TransitJourneyPage'
 import './App.css'
 
 function App() {
   return (
     <Routes>
-      <Route path="/" element={<SystemStatusPage />} />
+      <Route path="/" element={<TransitJourneyPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
