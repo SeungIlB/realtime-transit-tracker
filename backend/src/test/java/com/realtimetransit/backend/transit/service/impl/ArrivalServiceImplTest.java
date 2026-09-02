@@ -20,6 +20,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.realtimetransit.backend.transit.entity.UpcomingArrivalEntity;
 import com.realtimetransit.backend.transit.repository.ArrivalQueryMapper;
+import com.realtimetransit.backend.provider.service.TransitExternalCollectionService;
 
 @ExtendWith(MockitoExtension.class)
 class ArrivalServiceImplTest {
@@ -28,6 +29,8 @@ class ArrivalServiceImplTest {
 
 	@Mock
 	private ArrivalQueryMapper arrivalQueryMapper;
+	@Mock
+	private TransitExternalCollectionService externalCollectionService;
 
 	private ArrivalServiceImpl arrivalService;
 
@@ -35,7 +38,8 @@ class ArrivalServiceImplTest {
 	void setUp() {
 		arrivalService = new ArrivalServiceImpl(
 				arrivalQueryMapper,
-				Clock.fixed(NOW, ZoneOffset.UTC));
+				Clock.fixed(NOW, ZoneOffset.UTC),
+				externalCollectionService);
 	}
 
 	@Test

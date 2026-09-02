@@ -15,6 +15,8 @@ public interface TransitLineMapper {
 			@Param("providerId") long providerId,
 			@Param("providerLineId") String providerLineId);
 
+	Optional<TransitLineEntity> findById(@Param("id") java.util.UUID id);
+
 	List<TransitLineEntity> searchActiveLines(
 			@Param("providerId") long providerId,
 			@Param("query") String query,

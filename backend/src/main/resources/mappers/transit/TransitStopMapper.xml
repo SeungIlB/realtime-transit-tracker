@@ -54,6 +54,12 @@
           AND provider_stop_id = #{providerStopId}
     </select>
 
+	<select id="findById" resultMap="transitStopRowMap">
+		SELECT <include refid="transitStopColumns" />
+		FROM transit_stop
+		WHERE id = #{id}
+	</select>
+
     <insert id="upsertTransitStop">
         INSERT INTO transit_stop (
             id, provider_id, provider_stop_id, parent_station_id, public_name,

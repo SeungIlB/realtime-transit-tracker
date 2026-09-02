@@ -16,4 +16,6 @@ public interface TransitProviderMapper {
 	List<TransitProviderEntity> findAllActive();
 
 	Optional<TransitProviderEntity> findByCode(@Param("code") String code);
+
+	Optional<TransitProviderEntity> findById(@Param("id") long id);
 }

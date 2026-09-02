@@ -1,14 +1,13 @@
 package com.realtimetransit.backend.transit.service.impl;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
-import com.realtimetransit.backend.transit.dto.request.TransitStopSyncRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.realtimetransit.backend.provider.service.TransitExternalCollectionService;
 import com.realtimetransit.backend.transit.dto.response.DestinationStopResponse;
 import com.realtimetransit.backend.transit.dto.response.DirectedStopResponse;
 import com.realtimetransit.backend.transit.repository.TransitStopMapper;
@@ -22,17 +21,24 @@ import lombok.RequiredArgsConstructor;
 public class TransitStopServiceImpl implements TransitStopService {
 
 	private final TransitStopMapper transitStopMapper;
+	private final TransitExternalCollectionService externalCollectionService;
 
 	@Override
+	@Transactional
 	public List<DirectedStopResponse> findActiveStopsByLineId(UUID lineId) {
 		Objects.requireNonNull(lineId, "lineId must not be null");
-
-		return transitStopMapper.findActiveStopsByLineId(lineId).stream()
+		var stops = transitStopMapper.findActiveStopsByLineId(lineId);
+		if (stops.isEmpty()) {
+			externalCollectionService.synchronizeRoute(lineId);
+			stops = transitStopMapper.findActiveStopsByLineId(lineId);
+		}
+		return stops.stream()
 				.map(DirectedStopResponse::from)
 				.toList();
 	}
 
 	@Override
+	@Transactional
 	public List<DestinationStopResponse> findDestinationsAfterBoardingStop(
 			UUID lineId,
 			UUID boardingStopId) {

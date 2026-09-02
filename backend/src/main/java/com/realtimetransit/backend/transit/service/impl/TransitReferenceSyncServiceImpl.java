@@ -48,6 +48,17 @@ public class TransitReferenceSyncServiceImpl implements TransitReferenceSyncServ
 	public Map<String, UUID> synchronizeTransitLines(
 			long providerId,
 			List<TransitLineSyncRequest> lines) {
+		Map<String, UUID> result = upsertTransitLines(providerId, lines);
+		transitLineMapper.deactivateTransitLinesNotInProviderLineIds(
+				providerId,
+				lines.stream().map(TransitLineSyncRequest::getProviderLineId).toList());
+		return result;
+	}
+
+	@Override
+	public Map<String, UUID> upsertTransitLines(
+			long providerId,
+			List<TransitLineSyncRequest> lines) {
 		referenceSyncValidator.validateLines(providerId, lines);
 
 		Map<String, UUID> lineIdsByProviderLineId = new LinkedHashMap<>();
@@ -73,9 +84,6 @@ public class TransitReferenceSyncServiceImpl implements TransitReferenceSyncServ
 			lineIdsByProviderLineId.put(line.getProviderLineId(), actualLineId);
 		}
 
-		transitLineMapper.deactivateTransitLinesNotInProviderLineIds(
-				providerId,
-				lines.stream().map(TransitLineSyncRequest::getProviderLineId).toList());
 		return Map.copyOf(lineIdsByProviderLineId);
 	}
 

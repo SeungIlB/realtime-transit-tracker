@@ -30,6 +30,12 @@
           AND provider_line_id = #{providerLineId}
     </select>
 
+	<select id="findById" resultMap="transitLineRowMap">
+		SELECT <include refid="transitLineColumns" />
+		FROM transit_line
+		WHERE id = #{id}
+	</select>
+
     <insert id="upsertTransitLine">
         INSERT INTO transit_line (
             id, provider_id, provider_line_id, public_name, operator_name,

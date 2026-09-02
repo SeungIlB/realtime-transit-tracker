@@ -16,6 +16,10 @@ public interface TransitReferenceSyncService {
 			long providerId,
 			List<TransitLineSyncRequest> lines);
 
+	Map<String, UUID> upsertTransitLines(
+			long providerId,
+			List<TransitLineSyncRequest> lines);
+
 	Map<String, UUID> synchronizeTransitStops(
 			long providerId,
 			List<TransitStopSyncRequest> stops);

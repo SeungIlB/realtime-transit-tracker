@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.realtimetransit.backend.provider.repository.TransitProviderMapper;
+import com.realtimetransit.backend.provider.service.TransitExternalCollectionService;
 import com.realtimetransit.backend.common.error.BusinessException;
 import com.realtimetransit.backend.common.error.ErrorCode;
 import com.realtimetransit.backend.transit.dto.response.TransitLineResponse;
@@ -23,14 +24,20 @@ public class TransitLineServiceImpl implements TransitLineService {
 
 	private final TransitProviderMapper transitProviderMapper;
 	private final TransitLineMapper transitLineMapper;
+	private final TransitExternalCollectionService externalCollectionService;
 
 	@Override
+	@Transactional
 	public List<TransitLineResponse> searchActiveLines(String providerCode, String query, int limit) {
 		var provider = transitProviderMapper.findByCode(providerCode)
 				.orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Provider: " + providerCode));
 		int safeLimit = Math.clamp(limit, 1, MAX_SEARCH_LIMIT);
-
-		return transitLineMapper.searchActiveLines(provider.getId(), query.strip(), safeLimit).stream()
+		var lines = transitLineMapper.searchActiveLines(provider.getId(), query.strip(), safeLimit);
+		if (lines.isEmpty()) {
+			externalCollectionService.searchAndSynchronizeLines(providerCode, query.strip(), safeLimit);
+			lines = transitLineMapper.searchActiveLines(provider.getId(), query.strip(), safeLimit);
+		}
+		return lines.stream()
 				.map(TransitLineResponse::from)
 				.toList();
 	}

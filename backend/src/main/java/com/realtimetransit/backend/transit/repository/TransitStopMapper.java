@@ -18,6 +18,8 @@ public interface TransitStopMapper {
 			@Param("providerId") long providerId,
 			@Param("providerStopId") String providerStopId);
 
+	Optional<TransitStopEntity> findById(@Param("id") UUID id);
+
 	List<DirectedStopEntity> findActiveStopsByLineId(@Param("lineId") UUID lineId);
 
 	List<DestinationStopEntity> findDestinationsAfterBoardingStop(

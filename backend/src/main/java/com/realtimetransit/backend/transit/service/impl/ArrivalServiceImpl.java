@@ -10,6 +10,7 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.realtimetransit.backend.provider.service.TransitExternalCollectionService;
 import com.realtimetransit.backend.transit.dto.response.UpcomingArrivalResponse;
 import com.realtimetransit.backend.transit.repository.ArrivalQueryMapper;
 import com.realtimetransit.backend.transit.service.ArrivalService;
@@ -26,8 +27,10 @@ public class ArrivalServiceImpl implements ArrivalService {
 
 	private final ArrivalQueryMapper arrivalQueryMapper;
 	private final Clock clock;
+	private final TransitExternalCollectionService externalCollectionService;
 
 	@Override
+	@Transactional
 	public List<UpcomingArrivalResponse> findUpcomingArrivals(
 			UUID lineId,
 			UUID boardingStopId,
@@ -35,17 +38,21 @@ public class ArrivalServiceImpl implements ArrivalService {
 		Objects.requireNonNull(lineId, "lineId must not be null");
 		Objects.requireNonNull(boardingStopId, "boardingStopId must not be null");
 		Objects.requireNonNull(alightingStopId, "alightingStopId must not be null");
-
 		Instant asOf = clock.instant();
 		Instant observedAfter = asOf.minus(OBSERVATION_FRESHNESS);
-
-		return arrivalQueryMapper.findUpcomingArrivalsByLineIdAndBoardingStopIdAndAlightingStopId(
+		var arrivals = arrivalQueryMapper.findUpcomingArrivalsByLineIdAndBoardingStopIdAndAlightingStopId(
 				lineId,
 				boardingStopId,
 				alightingStopId,
 				asOf,
 				observedAfter,
-				UPCOMING_ARRIVAL_LIMIT).stream()
+				UPCOMING_ARRIVAL_LIMIT);
+		if (arrivals.isEmpty()) {
+			externalCollectionService.collectArrivals(lineId, boardingStopId);
+			arrivals = arrivalQueryMapper.findUpcomingArrivalsByLineIdAndBoardingStopIdAndAlightingStopId(
+					lineId, boardingStopId, alightingStopId, asOf, observedAfter, UPCOMING_ARRIVAL_LIMIT);
+		}
+		return arrivals.stream()
 				.map(UpcomingArrivalResponse::from)
 				.toList();
 	}

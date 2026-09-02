@@ -19,12 +19,15 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.realtimetransit.backend.transit.entity.DirectedStopEntity;
 import com.realtimetransit.backend.transit.entity.DestinationStopEntity;
 import com.realtimetransit.backend.transit.repository.TransitStopMapper;
+import com.realtimetransit.backend.provider.service.TransitExternalCollectionService;
 
 @ExtendWith(MockitoExtension.class)
 class TransitStopServiceImplTest {
 
 	@Mock
 	private TransitStopMapper transitStopMapper;
+	@Mock
+	private TransitExternalCollectionService externalCollectionService;
 
 	@InjectMocks
 	private TransitStopServiceImpl transitStopService;
@@ -59,7 +62,7 @@ class TransitStopServiceImplTest {
 		when(transitStopMapper.findActiveStopsByLineId(lineId)).thenReturn(List.of());
 
 		assertThat(transitStopService.findActiveStopsByLineId(lineId)).isEmpty();
-		verify(transitStopMapper).findActiveStopsByLineId(lineId);
+		verify(transitStopMapper, org.mockito.Mockito.times(2)).findActiveStopsByLineId(lineId);
 	}
 
 	@Test
