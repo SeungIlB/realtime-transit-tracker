@@ -1,12 +1,13 @@
 package com.realtimetransit.backend.transit.service.impl;
 
 import java.util.List;
-import java.util.Objects;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.realtimetransit.backend.common.error.BusinessException;
+import com.realtimetransit.backend.common.error.ErrorCode;
 import com.realtimetransit.backend.provider.service.TransitExternalCollectionService;
 import com.realtimetransit.backend.transit.dto.response.DestinationStopResponse;
 import com.realtimetransit.backend.transit.dto.response.DirectedStopResponse;
@@ -26,7 +27,7 @@ public class TransitStopServiceImpl implements TransitStopService {
 	@Override
 	@Transactional
 	public List<DirectedStopResponse> findActiveStopsByLineId(UUID lineId) {
-		Objects.requireNonNull(lineId, "lineId must not be null");
+		validateRequiredId(lineId, "lineId");
 		var stops = transitStopMapper.findActiveStopsByLineId(lineId);
 		if (stops.isEmpty()) {
 			externalCollectionService.synchronizeRoute(lineId);
@@ -42,13 +43,17 @@ public class TransitStopServiceImpl implements TransitStopService {
 	public List<DestinationStopResponse> findDestinationsAfterBoardingStop(
 			UUID lineId,
 			UUID boardingStopId) {
-		Objects.requireNonNull(lineId, "lineId must not be null");
-		Objects.requireNonNull(boardingStopId, "boardingStopId must not be null");
+		validateRequiredId(lineId, "lineId");
+		validateRequiredId(boardingStopId, "boardingStopId");
 
 		return transitStopMapper.findDestinationsAfterBoardingStop(lineId, boardingStopId).stream()
 				.map(DestinationStopResponse::from)
 				.toList();
 	}
 
-
+	private static void validateRequiredId(UUID value, String fieldName) {
+		if (value == null) {
+			throw new BusinessException(ErrorCode.INVALID_REQUEST, fieldName + " is required");
+		}
+	}
 }

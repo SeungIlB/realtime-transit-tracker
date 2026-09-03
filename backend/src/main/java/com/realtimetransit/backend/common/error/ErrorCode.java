@@ -9,6 +9,15 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public enum ErrorCode {
 	INVALID_REQUEST(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", "Request value is invalid"),
+	INVALID_JOURNEY_REQUEST(HttpStatus.BAD_REQUEST, "INVALID_JOURNEY_REQUEST", "Journey request is invalid"),
+	INVALID_JOURNEY_STOPS(HttpStatus.BAD_REQUEST, "INVALID_JOURNEY_STOPS", "Journey stops do not match the selected route direction"),
+	JOURNEY_NOT_FOUND(HttpStatus.NOT_FOUND, "JOURNEY_NOT_FOUND", "Journey session was not found"),
+	JOURNEY_NOT_ACTIVE(HttpStatus.CONFLICT, "JOURNEY_NOT_ACTIVE", "Journey session is not active"),
+	JOURNEY_STATUS_UPDATE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "JOURNEY_STATUS_UPDATE_FAILED", "Journey status could not be updated"),
+	INVALID_JOURNEY_LOCATION(HttpStatus.BAD_REQUEST, "INVALID_JOURNEY_LOCATION", "Journey location is invalid"),
+	JOURNEY_PROFILE_NOT_FOUND(HttpStatus.NOT_FOUND, "JOURNEY_PROFILE_NOT_FOUND", "Journey traveler profile was not found"),
+	BOARDING_STOP_COORDINATES_MISSING(HttpStatus.UNPROCESSABLE_CONTENT, "BOARDING_STOP_COORDINATES_MISSING", "Boarding stop coordinates are missing"),
+	PREDICTION_SERIALIZATION_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "PREDICTION_SERIALIZATION_FAILED", "Prediction factors could not be serialized"),
 	DUPLICATE_RESOURCE(HttpStatus.CONFLICT, "DUPLICATE_RESOURCE", "Resource is duplicated"),
 	RESOURCE_NOT_FOUND(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", "Resource was not found"),
 	SYNC_RESULT_NOT_FOUND(HttpStatus.INTERNAL_SERVER_ERROR, "SYNC_RESULT_NOT_FOUND", "Synchronized resource could not be read back"),

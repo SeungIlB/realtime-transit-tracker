@@ -29,17 +29,28 @@ public class TransitLineServiceImpl implements TransitLineService {
 	@Override
 	@Transactional
 	public List<TransitLineResponse> searchActiveLines(String providerCode, String query, int limit) {
+		validateSearchInput(providerCode, query);
+		String normalizedQuery = query.strip();
 		var provider = transitProviderMapper.findByCode(providerCode)
 				.orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Provider: " + providerCode));
 		int safeLimit = Math.clamp(limit, 1, MAX_SEARCH_LIMIT);
-		var lines = transitLineMapper.searchActiveLines(provider.getId(), query.strip(), safeLimit);
+		var lines = transitLineMapper.searchActiveLines(provider.getId(), normalizedQuery, safeLimit);
 		if (lines.isEmpty()) {
-			externalCollectionService.searchAndSynchronizeLines(providerCode, query.strip(), safeLimit);
-			lines = transitLineMapper.searchActiveLines(provider.getId(), query.strip(), safeLimit);
+			externalCollectionService.searchAndSynchronizeLines(providerCode, normalizedQuery, safeLimit);
+			lines = transitLineMapper.searchActiveLines(provider.getId(), normalizedQuery, safeLimit);
 		}
 		return lines.stream()
 				.map(TransitLineResponse::from)
 				.toList();
+	}
+
+	private static void validateSearchInput(String providerCode, String query) {
+		if (providerCode == null || providerCode.isBlank()) {
+			throw new BusinessException(ErrorCode.INVALID_REQUEST, "provider is required");
+		}
+		if (query == null || query.isBlank()) {
+			throw new BusinessException(ErrorCode.INVALID_REQUEST, "query is required");
+		}
 	}
 }
 

@@ -1,7 +1,7 @@
 package com.realtimetransit.backend.transit.service.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatNullPointerException;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -16,6 +16,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.realtimetransit.backend.common.error.BusinessException;
+import com.realtimetransit.backend.common.error.ErrorCode;
 import com.realtimetransit.backend.transit.entity.DirectedStopEntity;
 import com.realtimetransit.backend.transit.entity.DestinationStopEntity;
 import com.realtimetransit.backend.transit.repository.TransitStopMapper;
@@ -67,9 +69,7 @@ class TransitStopServiceImplTest {
 
 	@Test
 	void rejectsNullLineIdBeforeCallingMapper() {
-		assertThatNullPointerException()
-				.isThrownBy(() -> transitStopService.findActiveStopsByLineId(null))
-				.withMessage("lineId must not be null");
+		assertInvalidRequest(() -> transitStopService.findActiveStopsByLineId(null));
 		verifyNoInteractions(transitStopMapper);
 	}
 
@@ -111,13 +111,15 @@ class TransitStopServiceImplTest {
 		UUID lineId = UUID.randomUUID();
 		UUID boardingStopId = UUID.randomUUID();
 
-		assertThatNullPointerException()
-				.isThrownBy(() -> transitStopService.findDestinationsAfterBoardingStop(null, boardingStopId))
-				.withMessage("lineId must not be null");
-		assertThatNullPointerException()
-				.isThrownBy(() -> transitStopService.findDestinationsAfterBoardingStop(lineId, null))
-				.withMessage("boardingStopId must not be null");
+		assertInvalidRequest(() -> transitStopService.findDestinationsAfterBoardingStop(null, boardingStopId));
+		assertInvalidRequest(() -> transitStopService.findDestinationsAfterBoardingStop(lineId, null));
 		verifyNoInteractions(transitStopMapper);
+	}
+
+	private void assertInvalidRequest(Runnable invocation) {
+		assertThatThrownBy(invocation::run)
+				.isInstanceOfSatisfying(BusinessException.class,
+						exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INVALID_REQUEST));
 	}
 }
 

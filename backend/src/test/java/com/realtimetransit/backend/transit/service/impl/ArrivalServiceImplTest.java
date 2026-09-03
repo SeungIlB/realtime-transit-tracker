@@ -1,7 +1,7 @@
 package com.realtimetransit.backend.transit.service.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatNullPointerException;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -18,6 +18,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.realtimetransit.backend.common.error.BusinessException;
+import com.realtimetransit.backend.common.error.ErrorCode;
 import com.realtimetransit.backend.transit.entity.UpcomingArrivalEntity;
 import com.realtimetransit.backend.transit.repository.ArrivalQueryMapper;
 import com.realtimetransit.backend.provider.service.TransitExternalCollectionService;
@@ -43,13 +45,13 @@ class ArrivalServiceImplTest {
 	}
 
 	@Test
-	void returnsTwoMinuteFreshUpcomingArrivalsAsResponses() {
+	void returnsThirtySecondFreshUpcomingArrivalsAsResponses() {
 		UUID lineId = UUID.randomUUID();
 		UUID boardingStopId = UUID.randomUUID();
 		UUID alightingStopId = UUID.randomUUID();
 		UUID currentStopId = UUID.randomUUID();
 		when(arrivalQueryMapper.findUpcomingArrivalsByLineIdAndBoardingStopIdAndAlightingStopId(
-				lineId, boardingStopId, alightingStopId, NOW, NOW.minusSeconds(120), 2))
+				lineId, boardingStopId, alightingStopId, NOW, NOW.minusSeconds(30), 2))
 				.thenReturn(List.of(new UpcomingArrivalEntity(
 						1L, 2L, "vehicle-1", lineId, boardingStopId,
 						NOW.plusSeconds(180), NOW.plusSeconds(120), NOW.plusSeconds(240),
@@ -65,7 +67,7 @@ class ArrivalServiceImplTest {
 					assertThat(response.getCurrentStopId()).isEqualTo(currentStopId);
 				});
 		verify(arrivalQueryMapper).findUpcomingArrivalsByLineIdAndBoardingStopIdAndAlightingStopId(
-				lineId, boardingStopId, alightingStopId, NOW, NOW.minusSeconds(120), 2);
+				lineId, boardingStopId, alightingStopId, NOW, NOW.minusSeconds(30), 2);
 	}
 
 	@Test
@@ -74,11 +76,12 @@ class ArrivalServiceImplTest {
 		UUID boardingStopId = UUID.randomUUID();
 		UUID alightingStopId = UUID.randomUUID();
 		when(arrivalQueryMapper.findUpcomingArrivalsByLineIdAndBoardingStopIdAndAlightingStopId(
-				lineId, boardingStopId, alightingStopId, NOW, NOW.minusSeconds(120), 2))
+				lineId, boardingStopId, alightingStopId, NOW, NOW.minusSeconds(30), 2))
 				.thenReturn(List.of());
 
 		assertThat(arrivalService.findUpcomingArrivals(lineId, boardingStopId, alightingStopId))
 				.isEmpty();
+		verify(externalCollectionService).collectArrivals(lineId, boardingStopId);
 	}
 
 	@Test
@@ -87,16 +90,16 @@ class ArrivalServiceImplTest {
 		UUID boardingStopId = UUID.randomUUID();
 		UUID alightingStopId = UUID.randomUUID();
 
-		assertThatNullPointerException()
-				.isThrownBy(() -> arrivalService.findUpcomingArrivals(null, boardingStopId, alightingStopId))
-				.withMessage("lineId must not be null");
-		assertThatNullPointerException()
-				.isThrownBy(() -> arrivalService.findUpcomingArrivals(lineId, null, alightingStopId))
-				.withMessage("boardingStopId must not be null");
-		assertThatNullPointerException()
-				.isThrownBy(() -> arrivalService.findUpcomingArrivals(lineId, boardingStopId, null))
-				.withMessage("alightingStopId must not be null");
+		assertInvalidRequest(() -> arrivalService.findUpcomingArrivals(null, boardingStopId, alightingStopId));
+		assertInvalidRequest(() -> arrivalService.findUpcomingArrivals(lineId, null, alightingStopId));
+		assertInvalidRequest(() -> arrivalService.findUpcomingArrivals(lineId, boardingStopId, null));
 		verifyNoInteractions(arrivalQueryMapper);
+	}
+
+	private void assertInvalidRequest(Runnable invocation) {
+		assertThatThrownBy(invocation::run)
+				.isInstanceOfSatisfying(BusinessException.class,
+						exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INVALID_REQUEST));
 	}
 }
 
