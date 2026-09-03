@@ -1,5 +1,6 @@
 package com.realtimetransit.backend.transit.repository;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -25,6 +26,15 @@ public interface TransitStopMapper {
 	List<DestinationStopEntity> findDestinationsAfterBoardingStop(
 			@Param("lineId") UUID lineId,
 			@Param("boardingStopId") UUID boardingStopId);
+
+	List<TransitStopEntity> findActiveStopsWithinCoordinateBounds(
+			@Param("minLatitude") BigDecimal minLatitude,
+			@Param("maxLatitude") BigDecimal maxLatitude,
+			@Param("minLongitude") BigDecimal minLongitude,
+			@Param("maxLongitude") BigDecimal maxLongitude,
+			@Param("centerLatitude") BigDecimal centerLatitude,
+			@Param("centerLongitude") BigDecimal centerLongitude,
+			@Param("limit") int limit);
 
 	void upsertTransitStop(TransitStopEntity stop);
 }

@@ -24,6 +24,68 @@
         
     </resultMap>
 
+    <select id="findUpcomingArrivalsByLineIdAndBoardingStopId"
+            resultMap="upcomingArrivalMap">
+        WITH ranked_arrivals AS (
+            SELECT
+                apo.id AS "arrivalPredictionId",
+                vro.id AS "vehicleRunObservationId",
+                vro.provider_vehicle_id AS "providerVehicleId",
+                vro.line_id AS "lineId",
+                apo.boarding_stop_id AS "boardingStopId",
+                apo.expected_at AS "expectedAt",
+                apo.min_expected_at AS "minExpectedAt",
+                apo.max_expected_at AS "maxExpectedAt",
+                apo.remaining_stops AS "remainingStops",
+                apo.source AS "source",
+                apo.confidence AS "confidence",
+                vro.movement_status AS "movementStatus",
+                vro.current_stop_id AS "currentStopId",
+                vro.current_sequence AS "currentSequence",
+                apo.observed_at AS "observedAt",
+                apo.received_at AS "receivedAt",
+                ROW_NUMBER() OVER (
+                    PARTITION BY vro.provider_vehicle_id
+                    ORDER BY apo.observed_at DESC,
+                             apo.received_at DESC,
+                             apo.id DESC
+                ) AS "rowNumber"
+            FROM arrival_prediction_observation apo
+            INNER JOIN vehicle_run_observation vro
+                    ON vro.id = apo.vehicle_run_observation_id
+            INNER JOIN stop_pattern_stop boarding_sps
+                    ON boarding_sps.stop_pattern_id = vro.stop_pattern_id
+                   AND boarding_sps.stop_id = apo.boarding_stop_id
+                   AND boarding_sps.pickup_allowed = TRUE
+            WHERE vro.line_id = #{lineId}
+              AND apo.boarding_stop_id = #{boardingStopId}
+              AND apo.expected_at <![CDATA[ >= ]]> #{asOf}
+              AND apo.observed_at <![CDATA[ >= ]]> #{observedAfter}
+        )
+        SELECT
+            "arrivalPredictionId",
+            "vehicleRunObservationId",
+            "providerVehicleId",
+            "lineId",
+            "boardingStopId",
+            "expectedAt",
+            "minExpectedAt",
+            "maxExpectedAt",
+            "remainingStops",
+            "source",
+            "confidence",
+            "movementStatus",
+            "currentStopId",
+            "currentSequence",
+            "observedAt",
+            "receivedAt"
+        FROM ranked_arrivals
+        WHERE "rowNumber" = 1
+        ORDER BY "expectedAt" ASC,
+                 "providerVehicleId" ASC
+        LIMIT #{limit}
+    </select>
+
     <select id="findUpcomingArrivalsByLineIdAndBoardingStopIdAndAlightingStopId"
             resultMap="upcomingArrivalMap">
         WITH ranked_arrivals AS (
@@ -91,4 +153,3 @@
         LIMIT #{limit}
     </select>
 </mapper>
-

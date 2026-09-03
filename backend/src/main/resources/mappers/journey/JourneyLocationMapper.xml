@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.realtimetransit.backend.journey.repository.JourneyLocationMapper">
+    <resultMap id="travelerLocationObservationMap" type="TravelerLocationObservationEntity">
+        <id property="id" column="id" />
+        <result property="journeyId" column="journey_id" typeHandler="org.apache.ibatis.type.ObjectTypeHandler" />
+        <result property="latitude" column="latitude" />
+        <result property="longitude" column="longitude" />
+        <result property="accuracyM" column="accuracy_m" />
+        <result property="speedMps" column="speed_mps" />
+        <result property="observedAt" column="observed_at" />
+        <result property="receivedAt" column="received_at" />
+        <result property="expiresAt" column="expires_at" />
+    </resultMap>
+
+    <sql id="travelerLocationObservationColumns">
+        id, journey_id, latitude, longitude, accuracy_m, speed_mps,
+        observed_at, received_at, expires_at
+    </sql>
+
+    <select id="insertTravelerLocationObservation"
+            resultType="long"
+            affectData="true"
+            flushCache="true">
+        INSERT INTO traveler_location_observation (
+            journey_id, latitude, longitude, accuracy_m, speed_mps,
+            observed_at, received_at, expires_at
+        ) VALUES (
+            #{journeyId}, #{latitude}, #{longitude}, #{accuracyM}, #{speedMps},
+            #{observedAt}, #{receivedAt}, #{expiresAt}
+        )
+        RETURNING id
+    </select>
+
+    <select id="findLatestLocationByJourneyId" resultMap="travelerLocationObservationMap">
+        SELECT <include refid="travelerLocationObservationColumns" />
+        FROM traveler_location_observation
+        WHERE journey_id = #{journeyId}
+          AND expires_at <![CDATA[ >= ]]> #{asOf}
+        ORDER BY observed_at DESC, received_at DESC, id DESC
+        LIMIT 1
+    </select>
+
+    <delete id="deleteExpiredLocations">
+        DELETE FROM traveler_location_observation
+        WHERE id IN (
+            SELECT id
+            FROM traveler_location_observation
+            WHERE expires_at <![CDATA[ < ]]> #{asOf}
+            ORDER BY expires_at ASC, id ASC
+            LIMIT #{limit}
+        )
+    </delete>
+</mapper>

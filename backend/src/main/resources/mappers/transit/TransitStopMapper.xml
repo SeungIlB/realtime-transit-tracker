@@ -120,5 +120,33 @@
         ORDER BY rd.display_name,
                  destination.stop_sequence ASC
     </select>
+
+    <select id="findActiveStopsWithinCoordinateBounds" resultMap="transitStopRowMap">
+        SELECT
+            ts.id, ts.provider_id, ts.provider_stop_id, ts.parent_station_id,
+            ts.public_name, ts.latitude, ts.longitude, ts.source_updated_at,
+            ts.created_at, ts.updated_at
+        FROM transit_stop ts
+        WHERE ts.latitude BETWEEN #{minLatitude} AND #{maxLatitude}
+          AND ts.longitude BETWEEN #{minLongitude} AND #{maxLongitude}
+          AND EXISTS (
+              SELECT 1
+              FROM directed_stop ds
+              INNER JOIN route_direction rd
+                  ON rd.id = ds.direction_id
+                 AND rd.line_id = ds.line_id
+              INNER JOIN transit_line tl
+                  ON tl.id = rd.line_id
+              WHERE ds.stop_id = ts.id
+                AND rd.active = TRUE
+                AND tl.active = TRUE
+          )
+        ORDER BY
+            POWER(ts.latitude - #{centerLatitude}, 2)
+            + POWER(ts.longitude - #{centerLongitude}, 2),
+            ts.public_name,
+            ts.id
+        LIMIT #{limit}
+    </select>
 </mapper>
 

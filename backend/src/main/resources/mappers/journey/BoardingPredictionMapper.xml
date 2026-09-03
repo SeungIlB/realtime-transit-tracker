@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.realtimetransit.backend.journey.repository.BoardingPredictionMapper">
+    <resultMap id="boardingPredictionSnapshotMap" type="BoardingPredictionSnapshotEntity">
+        <id property="id" column="id" />
+        <result property="calculationId" column="calculation_id" typeHandler="org.apache.ibatis.type.ObjectTypeHandler" />
+        <result property="journeyId" column="journey_id" typeHandler="org.apache.ibatis.type.ObjectTypeHandler" />
+        <result property="locationObservationId" column="location_observation_id" />
+        <result property="vehicleRunObservationId" column="vehicle_run_observation_id" />
+        <result property="arrivalPredictionObservationId" column="arrival_prediction_observation_id" />
+        <result property="providerVehicleId" column="provider_vehicle_id" />
+        <result property="paceType" column="pace_type" />
+        <result property="paceSpeedMps" column="pace_speed_mps" />
+        <result property="distanceM" column="distance_m" />
+        <result property="userExpectedAt" column="user_expected_at" />
+        <result property="userMinExpectedAt" column="user_min_expected_at" />
+        <result property="userMaxExpectedAt" column="user_max_expected_at" />
+        <result property="vehicleExpectedAt" column="vehicle_expected_at" />
+        <result property="vehicleMinExpectedAt" column="vehicle_min_expected_at" />
+        <result property="vehicleMaxExpectedAt" column="vehicle_max_expected_at" />
+        <result property="boardingProbability" column="boarding_probability" />
+        <result property="decision" column="decision" />
+        <result property="recommended" column="recommended" />
+        <result property="confidence" column="confidence" />
+        <result property="modelVersion" column="model_version" />
+        <result property="factorsJson" column="factors" typeHandler="org.apache.ibatis.type.StringTypeHandler" />
+        <result property="calculatedAt" column="calculated_at" />
+        <result property="expiresAt" column="expires_at" />
+    </resultMap>
+
+    <sql id="boardingPredictionSnapshotColumns">
+        id, calculation_id, journey_id, location_observation_id,
+        vehicle_run_observation_id, arrival_prediction_observation_id,
+        provider_vehicle_id, pace_type, pace_speed_mps, distance_m,
+        user_expected_at, user_min_expected_at, user_max_expected_at,
+        vehicle_expected_at, vehicle_min_expected_at, vehicle_max_expected_at,
+        boarding_probability, decision, recommended, confidence, model_version,
+        factors, calculated_at, expires_at
+    </sql>
+
+    <insert id="insertBoardingPredictionSnapshots">
+        INSERT INTO boarding_prediction_snapshot (
+            calculation_id, journey_id, location_observation_id,
+            vehicle_run_observation_id, arrival_prediction_observation_id,
+            provider_vehicle_id, pace_type, pace_speed_mps, distance_m,
+            user_expected_at, user_min_expected_at, user_max_expected_at,
+            vehicle_expected_at, vehicle_min_expected_at, vehicle_max_expected_at,
+            boarding_probability, decision, recommended, confidence, model_version,
+            factors, calculated_at, expires_at
+        ) VALUES
+        <foreach collection="snapshots" item="snapshot" separator=",">
+            (
+                #{snapshot.calculationId}, #{snapshot.journeyId}, #{snapshot.locationObservationId},
+                #{snapshot.vehicleRunObservationId}, #{snapshot.arrivalPredictionObservationId},
+                #{snapshot.providerVehicleId}, #{snapshot.paceType}, #{snapshot.paceSpeedMps},
+                #{snapshot.distanceM}, #{snapshot.userExpectedAt}, #{snapshot.userMinExpectedAt},
+                #{snapshot.userMaxExpectedAt}, #{snapshot.vehicleExpectedAt},
+                #{snapshot.vehicleMinExpectedAt}, #{snapshot.vehicleMaxExpectedAt},
+                #{snapshot.boardingProbability}, #{snapshot.decision}, #{snapshot.recommended},
+                #{snapshot.confidence}, #{snapshot.modelVersion},
+                CAST(#{snapshot.factorsJson} AS JSONB), #{snapshot.calculatedAt}, #{snapshot.expiresAt}
+            )
+        </foreach>
+    </insert>
+
+    <select id="findLatestBoardingDecisionByJourneyId" resultMap="boardingPredictionSnapshotMap">
+        SELECT <include refid="boardingPredictionSnapshotColumns" />
+        FROM boarding_prediction_snapshot
+        WHERE journey_id = #{journeyId}
+          AND expires_at <![CDATA[ >= ]]> #{asOf}
+          AND calculation_id = (
+              SELECT calculation_id
+              FROM boarding_prediction_snapshot
+              WHERE journey_id = #{journeyId}
+                AND expires_at <![CDATA[ >= ]]> #{asOf}
+              ORDER BY calculated_at DESC, id DESC
+              LIMIT 1
+          )
+        ORDER BY provider_vehicle_id,
+                 CASE pace_type
+                     WHEN 'SLOW_WALK' THEN 1
+                     WHEN 'WALK' THEN 2
+                     WHEN 'FAST_WALK' THEN 3
+                     WHEN 'RUN' THEN 4
+                     ELSE 5
+                 END
+    </select>
+
+    <delete id="deleteExpiredPredictions">
+        DELETE FROM boarding_prediction_snapshot
+        WHERE id IN (
+            SELECT id
+            FROM boarding_prediction_snapshot
+            WHERE expires_at <![CDATA[ < ]]> #{asOf}
+            ORDER BY expires_at ASC, id ASC
+            LIMIT #{limit}
+        )
+    </delete>
+</mapper>

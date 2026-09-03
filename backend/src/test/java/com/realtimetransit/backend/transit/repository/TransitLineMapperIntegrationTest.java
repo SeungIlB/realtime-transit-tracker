@@ -217,6 +217,26 @@ class TransitLineMapperIntegrationTest {
 							assertThat(firstVehicle.getConfidence()).isEqualTo("HIGH");
 						});
 
+		assertThat(arrivalQueryMapper.findUpcomingArrivalsByLineIdAndBoardingStopId(
+				line.getId(), stop.getId(), receivedAt, receivedAt.minusSeconds(30), 3))
+				.satisfiesExactly(
+						reversedVehicle -> {
+							assertThat(reversedVehicle.getProviderVehicleId()).isEqualTo("vehicle-reversed");
+							assertThat(reversedVehicle.getExpectedAt()).isEqualTo(receivedAt.plusSeconds(30));
+						},
+						secondVehicle -> {
+							assertThat(secondVehicle.getProviderVehicleId()).isEqualTo("vehicle-2");
+							assertThat(secondVehicle.getExpectedAt()).isEqualTo(receivedAt.plusSeconds(180));
+						},
+						firstVehicle -> {
+							assertThat(firstVehicle.getProviderVehicleId()).isEqualTo("vehicle-1");
+							assertThat(firstVehicle.getExpectedAt()).isEqualTo(receivedAt.plusSeconds(300));
+							assertThat(firstVehicle.getConfidence()).isEqualTo("HIGH");
+						});
+		assertThat(arrivalQueryMapper.findUpcomingArrivalsByLineIdAndBoardingStopId(
+				line.getId(), stop.getId(), receivedAt, receivedAt.minusSeconds(30), 2))
+				.hasSize(2);
+
 		vehicleRunObservationMapper.insertVehicleRunObservation(new VehicleRunObservationEntity(
 				null, null, line.getId(), directionId, arrivalPatternId, "history-vehicle", null,
 				destinationStop.getId(), stop.getId(), 1, "LOCAL", "BETWEEN",

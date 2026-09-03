@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.realtimetransit.backend.journey.repository.TravelerProfileMapper">
+    <resultMap id="travelerProfileMap" type="TravelerProfileEntity">
+        <id property="id" column="id" typeHandler="org.apache.ibatis.type.ObjectTypeHandler" />
+        <result property="anonymousKey" column="anonymous_key" typeHandler="org.apache.ibatis.type.ObjectTypeHandler" />
+        <result property="slowWalkSpeedMps" column="slow_walk_speed_mps" />
+        <result property="walkSpeedMps" column="walk_speed_mps" />
+        <result property="fastWalkSpeedMps" column="fast_walk_speed_mps" />
+        <result property="runSpeedMps" column="run_speed_mps" />
+        <result property="sampleCount" column="sample_count" />
+        <result property="createdAt" column="created_at" />
+        <result property="updatedAt" column="updated_at" />
+    </resultMap>
+
+    <sql id="travelerProfileColumns">
+        id, anonymous_key, slow_walk_speed_mps, walk_speed_mps,
+        fast_walk_speed_mps, run_speed_mps, sample_count, created_at, updated_at
+    </sql>
+
+    <insert id="upsertTravelerProfile">
+        INSERT INTO traveler_profile (
+            id, anonymous_key, slow_walk_speed_mps, walk_speed_mps,
+            fast_walk_speed_mps, run_speed_mps, sample_count,
+            created_at, updated_at
+        ) VALUES (
+            #{id}, #{anonymousKey}, #{slowWalkSpeedMps}, #{walkSpeedMps},
+            #{fastWalkSpeedMps}, #{runSpeedMps}, #{sampleCount},
+            CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+        )
+        ON CONFLICT (anonymous_key) DO UPDATE SET
+            slow_walk_speed_mps = EXCLUDED.slow_walk_speed_mps,
+            walk_speed_mps = EXCLUDED.walk_speed_mps,
+            fast_walk_speed_mps = EXCLUDED.fast_walk_speed_mps,
+            run_speed_mps = EXCLUDED.run_speed_mps,
+            sample_count = EXCLUDED.sample_count,
+            updated_at = CURRENT_TIMESTAMP
+    </insert>
+
+    <select id="findById" resultMap="travelerProfileMap">
+        SELECT <include refid="travelerProfileColumns" />
+        FROM traveler_profile
+        WHERE id = #{id}
+    </select>
+
+    <select id="findByAnonymousKey" resultMap="travelerProfileMap">
+        SELECT <include refid="travelerProfileColumns" />
+        FROM traveler_profile
+        WHERE anonymous_key = #{anonymousKey}
+    </select>
+</mapper>

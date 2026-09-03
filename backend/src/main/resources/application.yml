@@ -25,7 +25,7 @@ spring:
 
 mybatis:
   mapper-locations: classpath:/mappers/**/*.xml
-  type-aliases-package: com.realtimetransit.backend.transit.entity,com.realtimetransit.backend.provider.entity
+  type-aliases-package: com.realtimetransit.backend.transit.entity,com.realtimetransit.backend.provider.entity,com.realtimetransit.backend.journey.entity
   type-handlers-package: com.realtimetransit.backend.common.mybatis
   configuration:
     map-underscore-to-camel-case: true
@@ -48,6 +48,26 @@ management:
       probes:
         enabled: true
       show-details: never
+
+journey:
+  default-target-probability: 0.8000
+  session-ttl: 30m
+  location-ttl: 10m
+  max-location-future-skew: 5s
+  walking-detour-factor: 1.20
+  departure-preparation-time: 10s
+  boarding-buffer: 15s
+  default-vehicle-eta-uncertainty: 45s
+  prediction-ttl: 2m
+  decision-refresh-interval: 20s
+  fresh-location-threshold: 30s
+  usable-location-threshold: 2m
+  high-accuracy-threshold-m: 20.00
+  medium-accuracy-threshold-m: 50.00
+  default-slow-walk-speed-mps: 0.90
+  default-walk-speed-mps: 1.30
+  default-fast-walk-speed-mps: 1.70
+  default-run-speed-mps: 2.50
 
 transit:
   api-quota:

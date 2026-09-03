@@ -12,6 +12,13 @@ import com.realtimetransit.backend.transit.entity.UpcomingArrivalEntity;
 @Mapper
 public interface ArrivalQueryMapper {
 
+	List<UpcomingArrivalEntity> findUpcomingArrivalsByLineIdAndBoardingStopId(
+			@Param("lineId") UUID lineId,
+			@Param("boardingStopId") UUID boardingStopId,
+			@Param("asOf") Instant asOf,
+			@Param("observedAfter") Instant observedAfter,
+			@Param("limit") int limit);
+
 	List<UpcomingArrivalEntity> findUpcomingArrivalsByLineIdAndBoardingStopIdAndAlightingStopId(
 			@Param("lineId") UUID lineId,
 			@Param("boardingStopId") UUID boardingStopId,
