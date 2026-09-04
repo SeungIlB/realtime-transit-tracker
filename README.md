@@ -4,7 +4,7 @@
 
 ## 현재 상태
 
-백엔드와 웹 MVP가 연결되어 있으며, 노선·정류장 데이터가 없을 때 공식 외부 API를 호출해 자동 동기화합니다. 전국 초정밀버스의 노선·정류장·차량 위치와 서울 지하철의 노선·역·실시간 도착정보를 지원합니다. GBIS도 동일한 흐름으로 구현되어 있으며 사용할 공공데이터포털 인증키의 활용신청 승인이 필요합니다.
+백엔드와 웹 MVP가 연결되어 있으며, 노선·정류장 데이터가 없을 때 공식 외부 API를 호출해 자동 동기화합니다. 전국 초정밀버스의 노선·정류장·차량 위치와 서울 지하철의 노선·역·실시간 도착정보를 지원합니다. 국가철도공단 역별 시간표를 결합해 급행·특급 열차의 하차역 정차 여부를 판정하며, GBIS와 각 외부 API에 맞는 활용신청 승인이 필요합니다.
 
 ## 개발 기준 문서
 
@@ -45,7 +45,7 @@
 
 ### 1. 환경변수
 
-필요하면 `.env.example`을 `.env`로 복사하고 값을 변경합니다. 기본 PostgreSQL·Redis 값은 별도 설정 없이 동작합니다. 외부 연동에는 `GBIS_SERVICE_KEY`, `NATIONAL_PRECISION_BUS_SERVICE_KEY`, `SEOUL_SUBWAY_SERVICE_KEY`를 사용하며 실제 API 키는 `.env`에만 저장합니다.
+필요하면 `.env.example`을 `.env`로 복사하고 값을 변경합니다. 기본 PostgreSQL·Redis 값은 별도 설정 없이 동작합니다. 외부 연동에는 `GBIS_SERVICE_KEY`, `NATIONAL_PRECISION_BUS_SERVICE_KEY`, `SEOUL_SUBWAY_SERVICE_KEY`, `KRIC_SERVICE_KEY`를 사용하며 실제 API 키는 `.env`에만 저장합니다. `KRIC_SERVICE_KEY`가 없으면 일반열차는 기존 정차 패턴을 사용하고 급행·특급은 정차 여부를 `UNKNOWN`으로 보존하며, 목적지가 선택된 추천 후보에서는 제외합니다.
 
 ### 2. PostgreSQL과 Redis
 
