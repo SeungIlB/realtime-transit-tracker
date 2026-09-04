@@ -34,6 +34,8 @@ export type UpcomingArrival = {
   arrivalPredictionId: number
   vehicleRunObservationId: number
   providerVehicleId: string
+  serviceType: string
+  alightingStopStatus: 'STOPS' | 'SKIPS' | 'UNKNOWN' | 'NOT_REQUESTED'
   lineId: string
   boardingStopId: string
   expectedAt: string
@@ -64,21 +66,24 @@ export function fetchDirectedStops(lineId: string, signal?: AbortSignal) {
 
 export function fetchDestinationStops(
   lineId: string,
+  directionId: string,
   boardingStopId: string,
   signal?: AbortSignal,
 ) {
+  const params = new URLSearchParams({ directionId })
   return fetchApi<DestinationStop[]>(
-    `/api/v1/lines/${lineId}/stops/${boardingStopId}/destinations`,
+    `/api/v1/lines/${lineId}/stops/${boardingStopId}/destinations?${params}`,
     signal,
   )
 }
 
 export function fetchUpcomingArrivals(
   lineId: string,
+  directionId: string,
   boardingStopId: string,
   alightingStopId: string,
   signal?: AbortSignal,
 ) {
-  const params = new URLSearchParams({ boardingStopId, alightingStopId })
+  const params = new URLSearchParams({ directionId, boardingStopId, alightingStopId })
   return fetchApi<UpcomingArrival[]>(`/api/v1/lines/${lineId}/arrivals?${params}`, signal)
 }

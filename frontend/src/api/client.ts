@@ -17,8 +17,13 @@ export class ApiError extends Error {
   }
 }
 
-export async function fetchApi<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const response = await fetch(path, { signal })
+export async function requestApi<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const headers = new Headers(init.headers)
+  if (init.body && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json')
+  }
+
+  const response = await fetch(path, { ...init, headers })
   const body = (await response.json()) as ApiResponse<T>
 
   if (!response.ok || !body.success) {
@@ -30,4 +35,8 @@ export async function fetchApi<T>(path: string, signal?: AbortSignal): Promise<T
   }
 
   return body.data
+}
+
+export function fetchApi<T>(path: string, signal?: AbortSignal): Promise<T> {
+  return requestApi<T>(path, { signal })
 }
