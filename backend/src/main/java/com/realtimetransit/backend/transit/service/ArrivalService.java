@@ -9,6 +9,7 @@ public interface ArrivalService {
 
 	List<UpcomingArrivalResponse> findUpcomingArrivals(
 			UUID lineId,
+			UUID directionId,
 			UUID boardingStopId,
 			UUID alightingStopId);
 }

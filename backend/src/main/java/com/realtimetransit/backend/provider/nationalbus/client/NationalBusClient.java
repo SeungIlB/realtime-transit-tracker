@@ -1,6 +1,8 @@
 package com.realtimetransit.backend.provider.nationalbus.client;
 
 import java.time.Instant;
+import java.time.Clock;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -33,13 +35,17 @@ public class NationalBusClient extends ProviderClientSupport implements TransitP
 	private static final int PAGE_SIZE = 1000;
 	private final RestClient restClient;
 	private final String serviceKey;
+	private final NationalBusReferenceClient referenceClient;
+	private final Clock clock;
 
 	public NationalBusClient(RestClient.Builder builder, ExternalApiQuotaService quotaService,
-			TransitProviderProperties properties) {
+			TransitProviderProperties properties, NationalBusReferenceClient referenceClient, Clock clock) {
 		super(quotaService);
 		var config = properties.getNationalPrecisionBus();
 		this.restClient = builder.baseUrl(config.getBaseUrl()).build();
 		this.serviceKey = decodeServiceKey(config.getServiceKey());
+		this.referenceClient = referenceClient;
+		this.clock = clock;
 	}
 
 	@Override
@@ -51,7 +57,7 @@ public class NationalBusClient extends ProviderClientSupport implements TransitP
 	@Cacheable(cacheNames = TransitCacheNames.TRANSIT_STATIC_DATA, key = "'NATIONAL:lines:' + #query + ':' + #limit")
 	public List<ExternalTransitLine> searchLines(String query, int limit) {
 		String normalized = query.strip().toLowerCase(Locale.ROOT);
-		return fetchAll("/mst_info", null).stream()
+		return referenceClient.findAllRoutes().stream()
 				.filter(item -> safe(text(item, "rteNo")).toLowerCase(Locale.ROOT).contains(normalized))
 				.sorted(Comparator.comparing(item -> safe(text(item, "rteNo"))))
 				.limit(limit)
@@ -63,7 +69,7 @@ public class NationalBusClient extends ProviderClientSupport implements TransitP
 	@Cacheable(cacheNames = TransitCacheNames.TRANSIT_STATIC_DATA, key = "'NATIONAL:route:' + #providerLineId")
 	public ExternalRouteReference fetchRoute(String providerLineId) {
 		ProviderLineKey key = ProviderLineKey.parse(providerLineId);
-		List<JsonNode> routeStops = fetchAll("/ps_info", key.getMunicipalityCode()).stream()
+		List<JsonNode> routeStops = referenceClient.findStops(key.getMunicipalityCode()).stream()
 				.filter(item -> key.getRouteId().equals(text(item, "rteId")))
 				.toList();
 		List<ExternalDirection> directions = routeStops.stream()
@@ -83,20 +89,104 @@ public class NationalBusClient extends ProviderClientSupport implements TransitP
 	@Cacheable(cacheNames = TransitCacheNames.NATIONAL_BUS_LOCATIONS, key = "#providerLineId")
 	public List<ExternalArrival> fetchArrivals(String providerLineId, String providerStopId) {
 		ProviderLineKey key = ProviderLineKey.parse(providerLineId);
+		List<ExternalDirection> directions = fetchRoute(providerLineId).getDirections();
 		return fetchAll("/rtm_loc_info", key.getMunicipalityCode()).stream()
 				.filter(item -> key.getRouteId().equals(text(item, "rteId")))
-				.map(item -> ExternalArrival.builder()
-						.providerVehicleId(text(item, "vhclNo"))
-						.providerRunId(key.getRouteId())
-						.movementStatus("UNKNOWN")
-						.latitude(decimal(item, "lat"))
-						.longitude(decimal(item, "lot"))
-						.speedKph(decimal(item, "oprSpd"))
-						.bearingDegrees(decimal(item, "oprDrct"))
-						.positionSource(positionSource(text(item, "evtType")))
-						.observedAt(firstInstant(item, "gthrDt", "totDt"))
-						.build())
+				.map(item -> toEstimatedArrival(item, key, providerStopId, directions))
+				.filter(java.util.Objects::nonNull)
 				.toList();
+	}
+
+	private ExternalArrival toEstimatedArrival(
+			JsonNode item,
+			ProviderLineKey key,
+			String providerStopId,
+			List<ExternalDirection> directions) {
+		BigDecimal latitude = decimal(item, "lat");
+		BigDecimal longitude = decimal(item, "lot");
+		if (latitude == null || longitude == null) return null;
+		RouteProgress progress = directions.stream()
+				.map(direction -> progress(direction, providerStopId, latitude, longitude))
+				.filter(java.util.Objects::nonNull)
+				.min(Comparator.comparingDouble(RouteProgress::getProjectionDistanceM))
+				.orElse(null);
+		if (progress == null) return null;
+		Instant observedAt = firstInstant(item, "gthrDt", "totDt");
+		if (observedAt == null) observedAt = clock.instant();
+		BigDecimal reportedSpeed = decimal(item, "oprSpd");
+		double speedKph = reportedSpeed == null ? 0 : reportedSpeed.doubleValue();
+		double effectiveSpeedMps = Math.max(speedKph, 15.0) / 3.6;
+		long remainingSeconds = Math.max(30L, Math.round(progress.getRemainingDistanceM() / effectiveSpeedMps));
+		return ExternalArrival.builder()
+				.providerVehicleId(text(item, "vhclNo"))
+				.providerRunId(key.getRouteId())
+				.providerDirectionId(progress.getDirection().getProviderDirectionId())
+				.currentProviderStopId(progress.getCurrentStop().getProviderStopId())
+				.currentSequence(progress.getCurrentIndex() + 1)
+				.expectedAt(observedAt.plusSeconds(remainingSeconds))
+				.remainingStops(progress.getTargetIndex() - progress.getCurrentIndex())
+				.movementStatus("BETWEEN")
+				.latitude(latitude)
+				.longitude(longitude)
+				.speedKph(reportedSpeed)
+				.bearingDegrees(decimal(item, "oprDrct"))
+				.positionSource(positionSource(text(item, "evtType")))
+				.confidence("LOW")
+				.observedAt(observedAt)
+				.build();
+	}
+
+	static RouteProgress progress(
+			ExternalDirection direction,
+			String providerStopId,
+			BigDecimal latitude,
+			BigDecimal longitude) {
+		List<ExternalStop> stops = direction.getStops();
+		int targetIndex = -1;
+		for (int index = 0; index < stops.size(); index++) {
+			if (providerStopId.equals(stops.get(index).getProviderStopId())) {
+				targetIndex = index;
+				break;
+			}
+		}
+		if (targetIndex < 0) return null;
+		int currentIndex = -1;
+		double projectionDistance = Double.MAX_VALUE;
+		for (int index = 0; index < stops.size(); index++) {
+			ExternalStop stop = stops.get(index);
+			if (stop.getLatitude() == null || stop.getLongitude() == null) continue;
+			double distance = distanceMeters(latitude, longitude, stop.getLatitude(), stop.getLongitude());
+			if (distance < projectionDistance) {
+				projectionDistance = distance;
+				currentIndex = index;
+			}
+		}
+		if (currentIndex < 0 || currentIndex > targetIndex) return null;
+		double remainingDistance = projectionDistance;
+		for (int index = currentIndex; index < targetIndex; index++) {
+			ExternalStop from = stops.get(index);
+			ExternalStop to = stops.get(index + 1);
+			if (from.getLatitude() == null || from.getLongitude() == null
+					|| to.getLatitude() == null || to.getLongitude() == null) return null;
+			remainingDistance += distanceMeters(
+					from.getLatitude(), from.getLongitude(), to.getLatitude(), to.getLongitude());
+		}
+		return new RouteProgress(direction, stops.get(currentIndex), currentIndex, targetIndex,
+				projectionDistance, remainingDistance);
+	}
+
+	private static double distanceMeters(
+			BigDecimal firstLatitude,
+			BigDecimal firstLongitude,
+			BigDecimal secondLatitude,
+			BigDecimal secondLongitude) {
+		double lat1 = Math.toRadians(firstLatitude.doubleValue());
+		double lat2 = Math.toRadians(secondLatitude.doubleValue());
+		double deltaLat = lat2 - lat1;
+		double deltaLon = Math.toRadians(secondLongitude.doubleValue() - firstLongitude.doubleValue());
+		double haversine = Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2)
+				+ Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLon / 2) * Math.sin(deltaLon / 2);
+		return 6_371_000.0 * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
 	}
 
 	private List<JsonNode> fetchAll(String path, String municipalityCode) {
@@ -210,5 +300,16 @@ public class NationalBusClient extends ProviderClientSupport implements TransitP
 			if (parts.length != 2) throw new BusinessException(ErrorCode.INVALID_REQUEST, "Invalid national route ID");
 			return new ProviderLineKey(parts[0], parts[1]);
 		}
+	}
+
+	@lombok.Getter
+	@lombok.AllArgsConstructor
+	static final class RouteProgress {
+		private final ExternalDirection direction;
+		private final ExternalStop currentStop;
+		private final int currentIndex;
+		private final int targetIndex;
+		private final double projectionDistanceM;
+		private final double remainingDistanceM;
 	}
 }

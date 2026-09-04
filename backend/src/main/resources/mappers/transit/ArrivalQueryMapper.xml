@@ -8,6 +8,8 @@
             <id property="arrivalPredictionId" column="arrivalPredictionId" />
             <result property="vehicleRunObservationId" column="vehicleRunObservationId" />
             <result property="providerVehicleId" column="providerVehicleId" />
+            <result property="serviceType" column="serviceType" />
+            <result property="alightingStopStatus" column="alightingStopStatus" />
             <result property="lineId" column="lineId" />
             <result property="boardingStopId" column="boardingStopId" />
             <result property="expectedAt" column="expectedAt" />
@@ -18,7 +20,10 @@
             <result property="confidence" column="confidence" />
             <result property="movementStatus" column="movementStatus" />
             <result property="currentStopId" column="currentStopId" />
+            <result property="currentStopName" column="currentStopName" />
             <result property="currentSequence" column="currentSequence" />
+            <result property="latitude" column="latitude" />
+            <result property="longitude" column="longitude" />
             <result property="observedAt" column="observedAt" />
             <result property="receivedAt" column="receivedAt" />
         
@@ -31,6 +36,8 @@
                 apo.id AS "arrivalPredictionId",
                 vro.id AS "vehicleRunObservationId",
                 vro.provider_vehicle_id AS "providerVehicleId",
+                vro.service_type AS "serviceType",
+                apo.alighting_stop_status AS "alightingStopStatus",
                 vro.line_id AS "lineId",
                 apo.boarding_stop_id AS "boardingStopId",
                 apo.expected_at AS "expectedAt",
@@ -41,7 +48,10 @@
                 apo.confidence AS "confidence",
                 vro.movement_status AS "movementStatus",
                 vro.current_stop_id AS "currentStopId",
+                current_stop.public_name AS "currentStopName",
                 vro.current_sequence AS "currentSequence",
+                vro.latitude AS "latitude",
+                vro.longitude AS "longitude",
                 apo.observed_at AS "observedAt",
                 apo.received_at AS "receivedAt",
                 ROW_NUMBER() OVER (
@@ -53,11 +63,18 @@
             FROM arrival_prediction_observation apo
             INNER JOIN vehicle_run_observation vro
                     ON vro.id = apo.vehicle_run_observation_id
+            INNER JOIN transit_line tl
+                    ON tl.id = vro.line_id
+            INNER JOIN transit_provider tp
+                    ON tp.id = tl.provider_id
             INNER JOIN stop_pattern_stop boarding_sps
                     ON boarding_sps.stop_pattern_id = vro.stop_pattern_id
                    AND boarding_sps.stop_id = apo.boarding_stop_id
                    AND boarding_sps.pickup_allowed = TRUE
+            LEFT JOIN transit_stop current_stop
+                   ON current_stop.id = vro.current_stop_id
             WHERE vro.line_id = #{lineId}
+			  AND vro.direction_id = #{directionId}
               AND apo.boarding_stop_id = #{boardingStopId}
               AND apo.expected_at <![CDATA[ >= ]]> #{asOf}
               AND apo.observed_at <![CDATA[ >= ]]> #{observedAfter}
@@ -66,6 +83,8 @@
             "arrivalPredictionId",
             "vehicleRunObservationId",
             "providerVehicleId",
+            "serviceType",
+            "alightingStopStatus",
             "lineId",
             "boardingStopId",
             "expectedAt",
@@ -76,7 +95,10 @@
             "confidence",
             "movementStatus",
             "currentStopId",
+            "currentStopName",
             "currentSequence",
+            "latitude",
+            "longitude",
             "observedAt",
             "receivedAt"
         FROM ranked_arrivals
@@ -93,6 +115,8 @@
                 apo.id AS "arrivalPredictionId",
                 vro.id AS "vehicleRunObservationId",
                 vro.provider_vehicle_id AS "providerVehicleId",
+                vro.service_type AS "serviceType",
+                apo.alighting_stop_status AS "alightingStopStatus",
                 vro.line_id AS "lineId",
                 apo.boarding_stop_id AS "boardingStopId",
                 apo.expected_at AS "expectedAt",
@@ -103,7 +127,10 @@
                 apo.confidence AS "confidence",
                 vro.movement_status AS "movementStatus",
                 vro.current_stop_id AS "currentStopId",
+                current_stop.public_name AS "currentStopName",
                 vro.current_sequence AS "currentSequence",
+                vro.latitude AS "latitude",
+                vro.longitude AS "longitude",
                 apo.observed_at AS "observedAt",
                 apo.received_at AS "receivedAt",
                 ROW_NUMBER() OVER (
@@ -115,24 +142,38 @@
             FROM arrival_prediction_observation apo
             INNER JOIN vehicle_run_observation vro
                     ON vro.id = apo.vehicle_run_observation_id
+            INNER JOIN transit_line tl
+                    ON tl.id = vro.line_id
+            INNER JOIN transit_provider tp
+                    ON tp.id = tl.provider_id
             INNER JOIN stop_pattern_stop boarding_sps
                     ON boarding_sps.stop_pattern_id = vro.stop_pattern_id
                    AND boarding_sps.stop_id = apo.boarding_stop_id
                    AND boarding_sps.pickup_allowed = TRUE
+            LEFT JOIN transit_stop current_stop
+                   ON current_stop.id = vro.current_stop_id
             INNER JOIN stop_pattern_stop alighting_sps
                     ON alighting_sps.stop_pattern_id = vro.stop_pattern_id
                    AND alighting_sps.stop_id = #{alightingStopId}
                    AND alighting_sps.dropoff_allowed = TRUE
                    AND alighting_sps.stop_sequence <![CDATA[ > ]]> boarding_sps.stop_sequence
             WHERE vro.line_id = #{lineId}
+			  AND vro.direction_id = #{directionId}
               AND apo.boarding_stop_id = #{boardingStopId}
               AND apo.expected_at <![CDATA[ >= ]]> #{asOf}
               AND apo.observed_at <![CDATA[ >= ]]> #{observedAfter}
+              AND (
+                    apo.requested_alighting_stop_id IS NULL
+                    OR apo.requested_alighting_stop_id = #{alightingStopId}
+              )
+			  AND apo.alighting_stop_status = 'STOPS'
         )
         SELECT
             "arrivalPredictionId",
             "vehicleRunObservationId",
             "providerVehicleId",
+            "serviceType",
+            "alightingStopStatus",
             "lineId",
             "boardingStopId",
             "expectedAt",
@@ -143,7 +184,10 @@
             "confidence",
             "movementStatus",
             "currentStopId",
+            "currentStopName",
             "currentSequence",
+            "latitude",
+            "longitude",
             "observedAt",
             "receivedAt"
         FROM ranked_arrivals

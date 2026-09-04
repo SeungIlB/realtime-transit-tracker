@@ -22,6 +22,10 @@ public class ArrivalPredictionObservationSaveRequest {
 	private Long vehicleRunObservationId;
 	@NotNull(message = "{validation.boarding-stop-id.required}")
 	private UUID boardingStopId;
+	private UUID requestedAlightingStopId;
+	private boolean alightingStopConfirmed;
+	@NotBlank(message = "{validation.alighting-stop-status.required}")
+	private String alightingStopStatus;
 	private Instant expectedAt;
 	private Instant minExpectedAt;
 	private Instant maxExpectedAt;

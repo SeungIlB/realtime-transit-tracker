@@ -25,10 +25,12 @@ public class ArrivalController {
 	@GetMapping
 	public ResponseDTO<List<UpcomingArrivalResponse>> findUpcomingArrivals(
 			@PathVariable UUID lineId,
+			@RequestParam UUID directionId,
 			@RequestParam UUID boardingStopId,
 			@RequestParam UUID alightingStopId) {
 		return ResponseDTO.success(arrivalService.findUpcomingArrivals(
 				lineId,
+				directionId,
 				boardingStopId,
 				alightingStopId));
 	}

@@ -9,6 +9,9 @@
             <result property="rawObservationId" column="raw_observation_id" />
             <result property="vehicleRunObservationId" column="vehicle_run_observation_id" />
             <result property="boardingStopId" column="boarding_stop_id" />
+            <result property="requestedAlightingStopId" column="requested_alighting_stop_id" />
+            <result property="alightingStopConfirmed" column="alighting_stop_confirmed" />
+            <result property="alightingStopStatus" column="alighting_stop_status" />
             <result property="expectedAt" column="expected_at" />
             <result property="minExpectedAt" column="min_expected_at" />
             <result property="maxExpectedAt" column="max_expected_at" />
@@ -22,6 +25,7 @@
 
     <sql id="arrivalPredictionObservationColumns">
         id, raw_observation_id, vehicle_run_observation_id, boarding_stop_id,
+        requested_alighting_stop_id, alighting_stop_confirmed, alighting_stop_status,
         expected_at, min_expected_at, max_expected_at, remaining_stops,
         source, confidence, observed_at, received_at
     </sql>
@@ -31,10 +35,14 @@
             affectData="true"
             flushCache="true">
         INSERT INTO arrival_prediction_observation (
-        raw_observation_id, vehicle_run_observation_id, boarding_stop_id, expected_at, min_expected_at, max_expected_at,
+        raw_observation_id, vehicle_run_observation_id, boarding_stop_id,
+        requested_alighting_stop_id, alighting_stop_confirmed, alighting_stop_status,
+        expected_at, min_expected_at, max_expected_at,
         remaining_stops, source, confidence, observed_at, received_at
         ) VALUES (
-        #{rawObservationId}, #{vehicleRunObservationId}, #{boardingStopId}, #{expectedAt}, #{minExpectedAt}, #{maxExpectedAt},
+        #{rawObservationId}, #{vehicleRunObservationId}, #{boardingStopId},
+        #{requestedAlightingStopId}, #{alightingStopConfirmed}, COALESCE(#{alightingStopStatus}, 'UNKNOWN'),
+        #{expectedAt}, #{minExpectedAt}, #{maxExpectedAt},
         #{remainingStops}, #{source}, #{confidence}, #{observedAt}, #{receivedAt}
         ) RETURNING id
     </select>

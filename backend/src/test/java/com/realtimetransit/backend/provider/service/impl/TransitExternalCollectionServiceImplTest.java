@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -30,14 +31,15 @@ import com.realtimetransit.backend.provider.client.dto.ExternalArrival;
 import com.realtimetransit.backend.provider.client.dto.ExternalDirection;
 import com.realtimetransit.backend.provider.client.dto.ExternalRouteReference;
 import com.realtimetransit.backend.provider.client.dto.ExternalStop;
-import com.realtimetransit.backend.provider.dto.request.ArrivalPredictionObservationSaveRequest;
 import com.realtimetransit.backend.provider.dto.request.VehicleRunObservationSaveRequest;
 import com.realtimetransit.backend.provider.entity.TransitProviderEntity;
 import com.realtimetransit.backend.provider.repository.TransitProviderMapper;
 import com.realtimetransit.backend.provider.service.ObservationService;
+import com.realtimetransit.backend.provider.service.SubwayStopConfirmationService;
 import com.realtimetransit.backend.provider.service.TransitProviderService;
 import com.realtimetransit.backend.transit.dto.request.StopPatternSyncRequest;
 import com.realtimetransit.backend.transit.entity.StopPatternEntity;
+import com.realtimetransit.backend.transit.entity.AlightingStopStatus;
 import com.realtimetransit.backend.transit.entity.TransitLineEntity;
 import com.realtimetransit.backend.transit.entity.TransitStopEntity;
 import com.realtimetransit.backend.transit.repository.RouteDirectionMapper;
@@ -52,6 +54,7 @@ class TransitExternalCollectionServiceImplTest {
 	private static final Instant NOW = Instant.parse("2026-09-02T06:00:00Z");
 	private static final UUID LINE_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
 	private static final UUID STOP_ID = UUID.fromString("20000000-0000-0000-0000-000000000001");
+	private static final UUID ALIGHTING_STOP_ID = UUID.fromString("20000000-0000-0000-0000-000000000002");
 	private static final UUID PATTERN_ID = UUID.fromString("30000000-0000-0000-0000-000000000001");
 
 	@Mock
@@ -71,6 +74,8 @@ class TransitExternalCollectionServiceImplTest {
 	@Mock
 	private ObservationService observationService;
 	@Mock
+	private SubwayStopConfirmationService subwayStopConfirmationService;
+	@Mock
 	private TransitProviderClient client;
 
 	private TransitExternalCollectionServiceImpl collectionService;
@@ -86,6 +91,7 @@ class TransitExternalCollectionServiceImplTest {
 				stopPatternMapper,
 				referenceSyncService,
 				observationService,
+				subwayStopConfirmationService,
 				Clock.fixed(NOW, ZoneOffset.UTC));
 	}
 
@@ -119,12 +125,17 @@ class TransitExternalCollectionServiceImplTest {
 	}
 
 	@Test
-	void storesExternalArrivalUsingAllowedObservationCodes() {
+	void storesVehicleButDoesNotRevivePastArrivalPrediction() {
 		stubLineAndProvider();
 		when(transitStopMapper.findById(STOP_ID)).thenReturn(Optional.of(TransitStopEntity.builder()
 				.id(STOP_ID)
 				.providerId(1L)
 				.providerStopId("provider-stop")
+				.build()));
+		when(transitStopMapper.findById(ALIGHTING_STOP_ID)).thenReturn(Optional.of(TransitStopEntity.builder()
+				.id(ALIGHTING_STOP_ID)
+				.providerId(1L)
+				.providerStopId("provider-alighting-stop")
 				.build()));
 		when(stopPatternMapper.findActiveStopPatternsByLineIdAndServiceDate(LINE_ID, LocalDate.of(2026, 9, 2)))
 				.thenReturn(List.of(StopPatternEntity.builder()
@@ -134,27 +145,26 @@ class TransitExternalCollectionServiceImplTest {
 		when(client.fetchArrivals("provider-line", "provider-stop")).thenReturn(List.of(ExternalArrival.builder()
 				.providerVehicleId("vehicle-1")
 				.providerDirectionId("UP")
-				.expectedAt(NOW.plusSeconds(300))
-				.movementStatus("BETWEEN")
+				.serviceType("EXPRESS")
+				.expectedAt(NOW.minusSeconds(60))
+				.movementStatus("APPROACHING")
 				.positionSource("ESTIMATED")
 				.observedAt(NOW)
 				.build()));
+		when(subwayStopConfirmationService.confirmAlightingStop(any(), any(), any(), any()))
+				.thenReturn(AlightingStopStatus.STOPS);
 		when(observationService.saveVehicleRunObservation(any())).thenReturn(10L);
 
-		collectionService.collectArrivals(LINE_ID, STOP_ID);
+		collectionService.collectArrivals(LINE_ID, STOP_ID, ALIGHTING_STOP_ID);
 
 		ArgumentCaptor<VehicleRunObservationSaveRequest> vehicle =
 				ArgumentCaptor.forClass(VehicleRunObservationSaveRequest.class);
 		verify(observationService).saveVehicleRunObservation(vehicle.capture());
-		assertThat(vehicle.getValue().getServiceType()).isEqualTo("UNKNOWN");
-		assertThat(vehicle.getValue().getMovementStatus()).isEqualTo("BETWEEN");
+		assertThat(vehicle.getValue().getServiceType()).isEqualTo("EXPRESS");
+		assertThat(vehicle.getValue().getMovementStatus()).isEqualTo("APPROACHING");
 		assertThat(vehicle.getValue().getPositionSource()).isEqualTo("ESTIMATED");
 
-		ArgumentCaptor<ArrivalPredictionObservationSaveRequest> arrival =
-				ArgumentCaptor.forClass(ArrivalPredictionObservationSaveRequest.class);
-		verify(observationService).saveArrivalPredictionObservation(arrival.capture());
-		assertThat(arrival.getValue().getSource()).isEqualTo("PROVIDER");
-		assertThat(arrival.getValue().getConfidence()).isEqualTo("HIGH");
+		verify(observationService, never()).saveArrivalPredictionObservation(any());
 	}
 
 	private void stubLineAndProvider() {
@@ -166,6 +176,7 @@ class TransitExternalCollectionServiceImplTest {
 		when(transitProviderMapper.findById(1L)).thenReturn(Optional.of(TransitProviderEntity.builder()
 				.id(1L)
 				.code(ExternalApiProvider.SEOUL_SUBWAY.name())
+				.transportType("SUBWAY")
 				.build()));
 		when(transitProviderService.getClient(ExternalApiProvider.SEOUL_SUBWAY)).thenReturn(client);
 	}

@@ -25,7 +25,15 @@ public interface TransitStopMapper {
 
 	List<DestinationStopEntity> findDestinationsAfterBoardingStop(
 			@Param("lineId") UUID lineId,
+			@Param("directionId") UUID directionId,
 			@Param("boardingStopId") UUID boardingStopId);
+
+	Optional<Boolean> canReachAlightingBeforeTerminal(
+			@Param("lineId") UUID lineId,
+			@Param("providerDirectionId") String providerDirectionId,
+			@Param("boardingStopId") UUID boardingStopId,
+			@Param("alightingStopId") UUID alightingStopId,
+			@Param("terminalProviderStopId") String terminalProviderStopId);
 
 	List<TransitStopEntity> findActiveStopsWithinCoordinateBounds(
 			@Param("minLatitude") BigDecimal minLatitude,

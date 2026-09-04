@@ -23,6 +23,7 @@ import com.realtimetransit.backend.transit.entity.RouteDirectionEntity;
 import com.realtimetransit.backend.transit.entity.StopPatternEntity;
 import com.realtimetransit.backend.transit.entity.StopPatternStopEntity;
 import com.realtimetransit.backend.transit.entity.TransitStopEntity;
+import com.realtimetransit.backend.transit.entity.UpcomingArrivalEntity;
 import com.realtimetransit.backend.provider.entity.RawObservationEntity;
 import com.realtimetransit.backend.provider.entity.VehicleRunObservationEntity;
 import com.realtimetransit.backend.provider.entity.ArrivalPredictionObservationEntity;
@@ -100,6 +101,16 @@ class TransitLineMapperIntegrationTest {
 		directedStopMapper.upsertDirectedStop(new DirectedStopAssignmentEntity(
 				UUID.randomUUID(), line.getId(), directionId, destinationStop.getId(), 2, null,
 				"platform-2", "종점 방면", "segment-2"));
+		UUID duplicateDisplayDirectionId = UUID.randomUUID();
+		routeDirectionMapper.upsertRouteDirection(new RouteDirectionEntity(
+				duplicateDisplayDirectionId, line.getId(), "outbound-branch", stop.getId(),
+				destinationStop.getId(), destinationStop.getId(), "종점 방면", true, null, null));
+		directedStopMapper.upsertDirectedStop(new DirectedStopAssignmentEntity(
+				UUID.randomUUID(), line.getId(), duplicateDisplayDirectionId, stop.getId(), 10,
+				destinationStop.getId(), "platform-branch-1", "종점 방면", "segment-branch-1"));
+		directedStopMapper.upsertDirectedStop(new DirectedStopAssignmentEntity(
+				UUID.randomUUID(), line.getId(), duplicateDisplayDirectionId, destinationStop.getId(), 11,
+				null, "platform-branch-2", "종점 방면", "segment-branch-2"));
 		UUID arrivalPatternId = UUID.randomUUID();
 		stopPatternMapper.upsertStopPattern(new StopPatternEntity(
 				arrivalPatternId, line.getId(), "arrival-pattern", "LOCAL",
@@ -137,7 +148,7 @@ class TransitLineMapperIntegrationTest {
 		long nullableVehicleObservationId = vehicleRunObservationMapper.insertVehicleRunObservation(
 				new VehicleRunObservationEntity(
 						null, null, line.getId(), null, arrivalPatternId, "vehicle-2", null,
-						null, null, null, "UNKNOWN", "UNKNOWN", null, null,
+						null, null, null, "LOCAL", "UNKNOWN", null, null,
 						null, null, "STOP_SEQUENCE", receivedAt, receivedAt));
 		assertThat(jdbcTemplate.queryForObject(
 				"SELECT raw_observation_id IS NULL AND direction_id IS NULL "
@@ -147,11 +158,22 @@ class TransitLineMapperIntegrationTest {
 				.isTrue();
 
 		long arrivalPredictionId = arrivalPredictionObservationMapper.insertArrivalPredictionObservation(
-				new ArrivalPredictionObservationEntity(
-						null, rawObservationId, vehicleObservationId, stop.getId(),
-						receivedAt.plusSeconds(300), receivedAt.plusSeconds(240),
-						receivedAt.plusSeconds(420), 3, "PROVIDER", "HIGH",
-						receivedAt.minusSeconds(5), receivedAt));
+				ArrivalPredictionObservationEntity.builder()
+						.rawObservationId(rawObservationId)
+						.vehicleRunObservationId(vehicleObservationId)
+						.boardingStopId(stop.getId())
+						.requestedAlightingStopId(destinationStop.getId())
+						.alightingStopConfirmed(true)
+						.alightingStopStatus("STOPS")
+						.expectedAt(receivedAt.plusSeconds(300))
+						.minExpectedAt(receivedAt.plusSeconds(240))
+						.maxExpectedAt(receivedAt.plusSeconds(420))
+						.remainingStops(3)
+						.source("PROVIDER")
+						.confidence("HIGH")
+						.observedAt(receivedAt.minusSeconds(5))
+						.receivedAt(receivedAt)
+						.build());
 		assertThat(jdbcTemplate.queryForMap(
 				"SELECT raw_observation_id, vehicle_run_observation_id, boarding_stop_id, "
 						+ "remaining_stops, source, confidence "
@@ -204,13 +226,9 @@ class TransitLineMapperIntegrationTest {
 						receivedAt, receivedAt));
 
 		assertThat(arrivalQueryMapper.findUpcomingArrivalsByLineIdAndBoardingStopIdAndAlightingStopId(
-				line.getId(), stop.getId(), destinationStop.getId(), receivedAt,
+				line.getId(), directionId, stop.getId(), destinationStop.getId(), receivedAt,
 				receivedAt.minusSeconds(120), 2))
 				.satisfiesExactly(
-						secondVehicle -> {
-							assertThat(secondVehicle.getProviderVehicleId()).isEqualTo("vehicle-2");
-							assertThat(secondVehicle.getExpectedAt()).isEqualTo(receivedAt.plusSeconds(180));
-						},
 						firstVehicle -> {
 							assertThat(firstVehicle.getProviderVehicleId()).isEqualTo("vehicle-1");
 							assertThat(firstVehicle.getExpectedAt()).isEqualTo(receivedAt.plusSeconds(300));
@@ -218,15 +236,11 @@ class TransitLineMapperIntegrationTest {
 						});
 
 		assertThat(arrivalQueryMapper.findUpcomingArrivalsByLineIdAndBoardingStopId(
-				line.getId(), stop.getId(), receivedAt, receivedAt.minusSeconds(30), 3))
+				line.getId(), directionId, stop.getId(), receivedAt, receivedAt.minusSeconds(30), 3))
 				.satisfiesExactly(
 						reversedVehicle -> {
 							assertThat(reversedVehicle.getProviderVehicleId()).isEqualTo("vehicle-reversed");
 							assertThat(reversedVehicle.getExpectedAt()).isEqualTo(receivedAt.plusSeconds(30));
-						},
-						secondVehicle -> {
-							assertThat(secondVehicle.getProviderVehicleId()).isEqualTo("vehicle-2");
-							assertThat(secondVehicle.getExpectedAt()).isEqualTo(receivedAt.plusSeconds(180));
 						},
 						firstVehicle -> {
 							assertThat(firstVehicle.getProviderVehicleId()).isEqualTo("vehicle-1");
@@ -234,8 +248,112 @@ class TransitLineMapperIntegrationTest {
 							assertThat(firstVehicle.getConfidence()).isEqualTo("HIGH");
 						});
 		assertThat(arrivalQueryMapper.findUpcomingArrivalsByLineIdAndBoardingStopId(
-				line.getId(), stop.getId(), receivedAt, receivedAt.minusSeconds(30), 2))
+				line.getId(), directionId, stop.getId(), receivedAt, receivedAt.minusSeconds(30), 2))
 				.hasSize(2);
+
+		long freshlyReceivedVehicleObservationId = vehicleRunObservationMapper.insertVehicleRunObservation(
+				new VehicleRunObservationEntity(
+						null, null, line.getId(), directionId, arrivalPatternId, "freshly-received", null,
+						destinationStop.getId(), stop.getId(), 1, "LOCAL", "APPROACHING",
+						null, null, null, null, "STOP_SEQUENCE",
+						receivedAt.minusSeconds(90), receivedAt));
+		arrivalPredictionObservationMapper.insertArrivalPredictionObservation(
+				new ArrivalPredictionObservationEntity(
+						null, null, freshlyReceivedVehicleObservationId, stop.getId(),
+						receivedAt.plusSeconds(10), null, null, 0, "PROVIDER", "HIGH",
+						receivedAt.minusSeconds(90), receivedAt));
+
+		assertThat(arrivalQueryMapper.findUpcomingArrivalsByLineIdAndBoardingStopId(
+				line.getId(), directionId, stop.getId(), receivedAt, receivedAt.minusSeconds(30), 1))
+				.singleElement()
+				.extracting(UpcomingArrivalEntity::getProviderVehicleId)
+				.isEqualTo("vehicle-reversed");
+
+		long subwayProviderIdForArrival = transitProviderMapper.findByCode("SEOUL_SUBWAY").orElseThrow().getId();
+		jdbcTemplate.update("UPDATE transit_line SET provider_id = ? WHERE id = ?", subwayProviderIdForArrival, line.getId());
+		long confirmedExpressVehicleId = vehicleRunObservationMapper.insertVehicleRunObservation(
+				VehicleRunObservationEntity.builder()
+						.lineId(line.getId())
+						.directionId(directionId)
+						.stopPatternId(arrivalPatternId)
+						.providerVehicleId("express-confirmed")
+						.serviceType("EXPRESS")
+						.movementStatus("BETWEEN")
+						.positionSource("STOP_SEQUENCE")
+						.observedAt(receivedAt)
+						.receivedAt(receivedAt)
+						.build());
+		arrivalPredictionObservationMapper.insertArrivalPredictionObservation(
+				ArrivalPredictionObservationEntity.builder()
+						.vehicleRunObservationId(confirmedExpressVehicleId)
+						.boardingStopId(stop.getId())
+						.requestedAlightingStopId(destinationStop.getId())
+						.alightingStopConfirmed(true)
+						.alightingStopStatus("STOPS")
+						.expectedAt(receivedAt.plusSeconds(20))
+						.source("PROVIDER")
+						.confidence("HIGH")
+						.observedAt(receivedAt)
+						.receivedAt(receivedAt)
+						.build());
+		long unconfirmedExpressVehicleId = vehicleRunObservationMapper.insertVehicleRunObservation(
+				VehicleRunObservationEntity.builder()
+						.lineId(line.getId())
+						.directionId(directionId)
+						.stopPatternId(arrivalPatternId)
+						.providerVehicleId("express-unconfirmed")
+						.serviceType("EXPRESS")
+						.movementStatus("BETWEEN")
+						.positionSource("STOP_SEQUENCE")
+						.observedAt(receivedAt)
+						.receivedAt(receivedAt)
+						.build());
+		arrivalPredictionObservationMapper.insertArrivalPredictionObservation(
+				ArrivalPredictionObservationEntity.builder()
+						.vehicleRunObservationId(unconfirmedExpressVehicleId)
+						.boardingStopId(stop.getId())
+						.requestedAlightingStopId(destinationStop.getId())
+						.alightingStopConfirmed(false)
+						.alightingStopStatus("SKIPS")
+						.expectedAt(receivedAt.plusSeconds(10))
+						.source("PROVIDER")
+						.confidence("HIGH")
+						.observedAt(receivedAt)
+						.receivedAt(receivedAt)
+						.build());
+		long unknownExpressVehicleId = vehicleRunObservationMapper.insertVehicleRunObservation(
+				VehicleRunObservationEntity.builder()
+						.lineId(line.getId())
+						.directionId(directionId)
+						.stopPatternId(arrivalPatternId)
+						.providerVehicleId("express-unknown")
+						.serviceType("EXPRESS")
+						.movementStatus("BETWEEN")
+						.positionSource("STOP_SEQUENCE")
+						.observedAt(receivedAt)
+						.receivedAt(receivedAt)
+						.build());
+		arrivalPredictionObservationMapper.insertArrivalPredictionObservation(
+				ArrivalPredictionObservationEntity.builder()
+						.vehicleRunObservationId(unknownExpressVehicleId)
+						.boardingStopId(stop.getId())
+						.requestedAlightingStopId(destinationStop.getId())
+						.alightingStopConfirmed(false)
+						.alightingStopStatus("UNKNOWN")
+						.expectedAt(receivedAt.plusSeconds(15))
+						.source("PROVIDER")
+						.confidence("LOW")
+						.observedAt(receivedAt)
+						.receivedAt(receivedAt)
+						.build());
+
+		assertThat(arrivalQueryMapper.findUpcomingArrivalsByLineIdAndBoardingStopIdAndAlightingStopId(
+				line.getId(), directionId, stop.getId(), destinationStop.getId(), receivedAt,
+				receivedAt.minusSeconds(30), 10))
+				.extracting(UpcomingArrivalEntity::getProviderVehicleId)
+				.contains("express-confirmed")
+				.doesNotContain("express-unconfirmed", "express-unknown");
+		jdbcTemplate.update("UPDATE transit_line SET provider_id = ? WHERE id = ?", providerId, line.getId());
 
 		vehicleRunObservationMapper.insertVehicleRunObservation(new VehicleRunObservationEntity(
 				null, null, line.getId(), directionId, arrivalPatternId, "history-vehicle", null,
@@ -362,7 +480,10 @@ class TransitLineMapperIntegrationTest {
 		assertThat(transitStopMapper.findActiveStopsByLineId(line.getId()))
 				.extracting(directedStop -> directedStop.getStopSequence())
 				.containsExactly(1, 2);
-		assertThat(transitStopMapper.findDestinationsAfterBoardingStop(line.getId(), stop.getId()))
+		routeDirectionMapper.upsertRouteDirection(new RouteDirectionEntity(
+				duplicateDisplayDirectionId, line.getId(), "outbound-branch", stop.getId(),
+				destinationStop.getId(), destinationStop.getId(), "종점 방면", false, null, null));
+		assertThat(transitStopMapper.findDestinationsAfterBoardingStop(line.getId(), directionId, stop.getId()))
 				.singleElement()
 				.satisfies(destination -> {
 					assertThat(destination.getDirectionId()).isEqualTo(directionId);
@@ -370,6 +491,9 @@ class TransitLineMapperIntegrationTest {
 					assertThat(destination.getStopName()).isEqualTo("다음 정류장");
 					assertThat(destination.getStopSequence()).isEqualTo(2);
 				});
+		assertThat(transitStopMapper.canReachAlightingBeforeTerminal(
+				line.getId(), "outbound", stop.getId(), destinationStop.getId(), "stop-2"))
+				.contains(true);
 
 		routeDirectionMapper.upsertRouteDirection(new RouteDirectionEntity(
 				UUID.randomUUID(), line.getId(), "outbound", stop.getId(), destinationStop.getId(), destinationStop.getId(),

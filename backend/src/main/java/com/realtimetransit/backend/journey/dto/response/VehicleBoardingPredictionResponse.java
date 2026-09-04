@@ -1,5 +1,6 @@
 package com.realtimetransit.backend.journey.dto.response;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 
@@ -18,6 +19,15 @@ public class VehicleBoardingPredictionResponse {
 	private Long arrivalPredictionId;
 	private Long vehicleRunObservationId;
 	private String providerVehicleId;
+	private String serviceType;
+	private String alightingStopStatus;
+	private String movementStatus;
+	private String currentStopName;
+	private Integer currentSequence;
+	private Integer remainingStops;
+	private BigDecimal latitude;
+	private BigDecimal longitude;
+	private Instant observedAt;
 	private Instant vehicleMinExpectedAt;
 	private Instant vehicleExpectedAt;
 	private Instant vehicleMaxExpectedAt;

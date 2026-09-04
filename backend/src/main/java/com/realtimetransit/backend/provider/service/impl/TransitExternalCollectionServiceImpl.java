@@ -1,6 +1,8 @@
 package com.realtimetransit.backend.provider.service.impl;
 
 import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -23,6 +25,7 @@ import com.realtimetransit.backend.provider.dto.request.VehicleRunObservationSav
 import com.realtimetransit.backend.provider.entity.TransitProviderEntity;
 import com.realtimetransit.backend.provider.repository.TransitProviderMapper;
 import com.realtimetransit.backend.provider.service.ObservationService;
+import com.realtimetransit.backend.provider.service.SubwayStopConfirmationService;
 import com.realtimetransit.backend.provider.service.TransitExternalCollectionService;
 import com.realtimetransit.backend.provider.service.TransitProviderService;
 import com.realtimetransit.backend.transit.dto.request.DirectedStopSyncRequest;
@@ -32,6 +35,7 @@ import com.realtimetransit.backend.transit.dto.request.StopPatternSyncRequest;
 import com.realtimetransit.backend.transit.dto.request.TransitLineSyncRequest;
 import com.realtimetransit.backend.transit.dto.request.TransitStopSyncRequest;
 import com.realtimetransit.backend.transit.entity.RouteDirectionEntity;
+import com.realtimetransit.backend.transit.entity.AlightingStopStatus;
 import com.realtimetransit.backend.transit.entity.StopPatternEntity;
 import com.realtimetransit.backend.transit.entity.TransitLineEntity;
 import com.realtimetransit.backend.transit.entity.TransitStopEntity;
@@ -47,6 +51,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class TransitExternalCollectionServiceImpl implements TransitExternalCollectionService {
 	private static final ZoneId KOREA_ZONE = ZoneId.of("Asia/Seoul");
+	private static final Duration ARRIVAL_CLOCK_SKEW_TOLERANCE = Duration.ofSeconds(5);
 	private final TransitProviderService transitProviderService;
 	private final TransitProviderMapper transitProviderMapper;
 	private final TransitLineMapper transitLineMapper;
@@ -55,6 +60,7 @@ public class TransitExternalCollectionServiceImpl implements TransitExternalColl
 	private final StopPatternMapper stopPatternMapper;
 	private final TransitReferenceSyncService referenceSyncService;
 	private final ObservationService observationService;
+	private final SubwayStopConfirmationService subwayStopConfirmationService;
 	private final Clock clock;
 
 	@Override
@@ -88,11 +94,13 @@ public class TransitExternalCollectionServiceImpl implements TransitExternalColl
 	}
 
 	@Override
-	public void collectArrivals(UUID lineId, UUID boardingStopId) {
+	public void collectArrivals(UUID lineId, UUID boardingStopId, UUID alightingStopId) {
 		TransitLineEntity line = line(lineId);
 		TransitProviderEntity provider = provider(line.getProviderId());
 		TransitStopEntity boardingStop = transitStopMapper.findById(boardingStopId)
 				.orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Stop: " + boardingStopId));
+		TransitStopEntity alightingStop = alightingStopId == null ? null : transitStopMapper.findById(alightingStopId)
+				.orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Stop: " + alightingStopId));
 		List<StopPatternEntity> patterns = stopPatternMapper.findActiveStopPatternsByLineIdAndServiceDate(
 				lineId, LocalDate.now(clock.withZone(KOREA_ZONE)));
 		if (patterns.isEmpty()) {
@@ -100,34 +108,100 @@ public class TransitExternalCollectionServiceImpl implements TransitExternalColl
 			patterns = stopPatternMapper.findActiveStopPatternsByLineIdAndServiceDate(
 					lineId, LocalDate.now(clock.withZone(KOREA_ZONE)));
 		}
-		List<ExternalArrival> arrivals = client(provider.getCode())
+		TransitProviderClient providerClient = client(provider.getCode());
+		List<ExternalArrival> arrivals = providerClient
 				.fetchArrivals(line.getProviderLineId(), boardingStop.getProviderStopId());
-		for (ExternalArrival arrival : arrivals) saveArrival(line, boardingStopId, patterns, arrival);
+		Instant receivedAt = clock.instant();
+		for (ExternalArrival arrival : arrivals) {
+			AlightingStopStatus alightingStopStatus = alightingStopStatus(
+					provider, line, boardingStop, alightingStop, arrival);
+			saveArrival(line, boardingStopId, alightingStopId, alightingStopStatus, patterns, arrival, receivedAt);
+		}
 	}
 
-	private void saveArrival(TransitLineEntity line, UUID boardingStopId,
-			List<StopPatternEntity> patterns, ExternalArrival arrival) {
-		StopPatternEntity pattern = selectPattern(patterns, arrival.getProviderDirectionId());
-		RouteDirectionEntity direction = arrival.getProviderDirectionId() == null ? null
-				: routeDirectionMapper.findRouteDirectionByBusinessKey(line.getId(), arrival.getProviderDirectionId()).orElse(null);
+	private AlightingStopStatus alightingStopStatus(
+			TransitProviderEntity provider,
+			TransitLineEntity line,
+			TransitStopEntity boardingStop,
+			TransitStopEntity alightingStop,
+			ExternalArrival arrival) {
+		if (alightingStop == null) return AlightingStopStatus.NOT_REQUESTED;
+		if (!"SUBWAY".equals(provider.getTransportType())) return AlightingStopStatus.STOPS;
+		return subwayStopConfirmationService.confirmAlightingStop(
+				line, boardingStop, alightingStop, arrival);
+	}
+
+	private void saveArrival(TransitLineEntity line, UUID boardingStopId, UUID alightingStopId,
+			AlightingStopStatus alightingStopStatus, List<StopPatternEntity> patterns,
+			ExternalArrival arrival, Instant receivedAt) {
 		UUID currentStopId = resolveStopId(line.getProviderId(), arrival.getCurrentProviderStopId());
 		UUID destinationStopId = resolveStopId(line.getProviderId(), arrival.getDestinationProviderStopId());
+		List<StopPatternEntity> matchingPatterns = selectPatterns(
+				patterns, arrival.getProviderDirectionId(), boardingStopId, destinationStopId);
+		if (matchingPatterns.isEmpty()) {
+			saveArrivalForPattern(line, boardingStopId, alightingStopId, alightingStopStatus,
+					arrival, receivedAt, currentStopId, destinationStopId, null);
+			return;
+		}
+		for (StopPatternEntity pattern : matchingPatterns) {
+			saveArrivalForPattern(line, boardingStopId, alightingStopId, alightingStopStatus,
+					arrival, receivedAt, currentStopId, destinationStopId, pattern);
+		}
+	}
+
+	private void saveArrivalForPattern(
+			TransitLineEntity line,
+			UUID boardingStopId,
+			UUID alightingStopId,
+			AlightingStopStatus alightingStopStatus,
+			ExternalArrival arrival,
+			Instant receivedAt,
+			UUID currentStopId,
+			UUID destinationStopId,
+			StopPatternEntity pattern) {
+		RouteDirectionEntity direction = pattern == null ? null
+				: routeDirectionMapper.findRouteDirectionByBusinessKey(
+						line.getId(), pattern.getProviderPatternId()).orElse(null);
 		long vehicleObservationId = observationService.saveVehicleRunObservation(
 				VehicleRunObservationSaveRequest.builder().lineId(line.getId())
 						.directionId(direction == null ? null : direction.getId()).stopPatternId(pattern == null ? null : pattern.getId())
 						.providerVehicleId(arrival.getProviderVehicleId()).providerRunId(arrival.getProviderRunId())
 						.destinationStopId(destinationStopId).currentStopId(currentStopId).currentSequence(arrival.getCurrentSequence())
-						.serviceType("UNKNOWN").movementStatus(arrival.getMovementStatus())
+					.serviceType(normalizeServiceType(arrival.getServiceType())).movementStatus(arrival.getMovementStatus())
 						.latitude(arrival.getLatitude()).longitude(arrival.getLongitude()).speedKph(arrival.getSpeedKph())
 						.bearingDegrees(arrival.getBearingDegrees()).positionSource(arrival.getPositionSource())
 						.observedAt(arrival.getObservedAt() == null ? clock.instant() : arrival.getObservedAt()).build());
-		if (arrival.getExpectedAt() != null && pattern != null) {
+		Instant expectedAt = normalizedExpectedAt(arrival.getExpectedAt(), receivedAt);
+		if (expectedAt != null && pattern != null) {
 			observationService.saveArrivalPredictionObservation(ArrivalPredictionObservationSaveRequest.builder()
 					.vehicleRunObservationId(vehicleObservationId).boardingStopId(boardingStopId)
-					.expectedAt(arrival.getExpectedAt()).remainingStops(arrival.getRemainingStops())
-					.source("PROVIDER").confidence("HIGH")
+					.requestedAlightingStopId(alightingStopId)
+					.alightingStopConfirmed(alightingStopStatus == AlightingStopStatus.STOPS)
+					.alightingStopStatus(alightingStopStatus.name())
+					.expectedAt(expectedAt).remainingStops(arrival.getRemainingStops())
+					.source("PROVIDER").confidence(normalizeConfidence(arrival.getConfidence()))
 					.observedAt(arrival.getObservedAt() == null ? clock.instant() : arrival.getObservedAt()).build());
 		}
+	}
+
+	private static Instant normalizedExpectedAt(Instant expectedAt, Instant receivedAt) {
+		if (expectedAt == null || !expectedAt.isBefore(receivedAt)) return expectedAt;
+		Duration lag = Duration.between(expectedAt, receivedAt);
+		return lag.compareTo(ARRIVAL_CLOCK_SKEW_TOLERANCE) <= 0 ? receivedAt : null;
+	}
+
+	private static String normalizeServiceType(String serviceType) {
+		return switch (serviceType == null ? "" : serviceType) {
+			case "LOCAL", "EXPRESS", "RAPID", "CIRCULAR", "SHUTTLE" -> serviceType;
+			default -> "UNKNOWN";
+		};
+	}
+
+	private static String normalizeConfidence(String confidence) {
+		return switch (confidence == null ? "" : confidence) {
+			case "HIGH", "MEDIUM", "LOW", "UNKNOWN" -> confidence;
+			default -> "HIGH";
+		};
 	}
 
 	private RouteDirectionSyncRequest directionRequest(ExternalDirection direction) {
@@ -185,10 +259,34 @@ public class TransitExternalCollectionServiceImpl implements TransitExternalColl
 		return transitStopMapper.findByProviderResourceId(providerId, providerStopId).map(TransitStopEntity::getId).orElse(null);
 	}
 
-	private static StopPatternEntity selectPattern(List<StopPatternEntity> patterns, String directionId) {
-		if (directionId != null) {
-			for (StopPatternEntity pattern : patterns) if (directionId.equals(pattern.getProviderPatternId())) return pattern;
+	private List<StopPatternEntity> selectPatterns(
+			List<StopPatternEntity> patterns,
+			String directionId,
+			UUID boardingStopId,
+			UUID destinationStopId) {
+		if (directionId == null) return List.of();
+		List<StopPatternEntity> directionPatterns = patterns.stream()
+				.filter(pattern -> pattern.getProviderPatternId().equals(directionId)
+						|| pattern.getProviderPatternId().startsWith(directionId + ":"))
+				.toList();
+		if (destinationStopId == null) {
+			return directionPatterns.stream()
+					.filter(pattern -> pattern.getProviderPatternId().equals(directionId))
+					.toList();
 		}
-		return patterns.isEmpty() ? null : patterns.getFirst();
+		List<StopPatternEntity> selected = new ArrayList<>();
+		for (StopPatternEntity pattern : directionPatterns) {
+			var stops = stopPatternMapper.findStopsByStopPatternId(pattern.getId());
+			Integer boardingSequence = stops.stream()
+					.filter(stop -> boardingStopId.equals(stop.getStopId()))
+					.map(stop -> stop.getStopSequence()).min(Integer::compareTo).orElse(null);
+			Integer destinationSequence = stops.stream()
+					.filter(stop -> destinationStopId.equals(stop.getStopId()))
+					.map(stop -> stop.getStopSequence())
+					.filter(sequence -> boardingSequence != null && sequence > boardingSequence)
+					.min(Integer::compareTo).orElse(null);
+			if (destinationSequence != null) selected.add(pattern);
+		}
+		return List.copyOf(selected);
 	}
 }

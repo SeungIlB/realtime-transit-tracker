@@ -32,6 +32,7 @@ public class RedisCacheConfig {
 						TransitCacheNames.GBIS_ARRIVALS, configuration(Duration.ofSeconds(15)),
 						TransitCacheNames.SEOUL_SUBWAY_ARRIVALS, configuration(Duration.ofSeconds(30)),
 						TransitCacheNames.NATIONAL_BUS_LOCATIONS, configuration(Duration.ofSeconds(15)),
+						TransitCacheNames.RAILWAY_TIMETABLE, configuration(Duration.ofHours(6)),
 						TransitCacheNames.TRANSIT_STATIC_DATA, configuration(Duration.ofHours(24))))
 				.enableStatistics()
 				.build();

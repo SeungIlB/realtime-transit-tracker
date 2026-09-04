@@ -87,6 +87,7 @@ class ObservationServiceImplTest {
 	void savesArrivalPredictionObservation() {
 		var request = ArrivalPredictionObservationSaveRequest.builder()
 				.boardingStopId(UUID.randomUUID()).source("PROVIDER")
+				.alightingStopStatus("NOT_REQUESTED")
 				.confidence("HIGH").observedAt(RECEIVED_AT).build();
 		when(arrivalPredictionObservationMapper.insertArrivalPredictionObservation(any())).thenReturn(13L);
 

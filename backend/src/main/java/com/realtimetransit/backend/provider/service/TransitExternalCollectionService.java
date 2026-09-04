@@ -5,5 +5,5 @@ import java.util.UUID;
 public interface TransitExternalCollectionService {
 	void searchAndSynchronizeLines(String providerCode, String query, int limit);
 	void synchronizeRoute(UUID lineId);
-	void collectArrivals(UUID lineId, UUID boardingStopId);
+	void collectArrivals(UUID lineId, UUID boardingStopId, UUID alightingStopId);
 }

@@ -6,6 +6,7 @@ import java.util.UUID;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.realtimetransit.backend.common.dto.ResponseDTO;
@@ -22,20 +23,20 @@ public class TransitStopController {
 
 	private final TransitStopService transitStopService;
 
-    @GetMapping
-    public ResponseDTO<List<DirectedStopResponse>> findStops(
-            @PathVariable UUID lineId) {
-
-        return ResponseDTO.success(
-                transitStopService.findActiveStopsByLineId(lineId));
-    }
+	@GetMapping
+	public ResponseDTO<List<DirectedStopResponse>> findStops(
+			@PathVariable UUID lineId) {
+		return ResponseDTO.success(transitStopService.findActiveStopsByLineId(lineId));
+	}
 
 	@GetMapping("/{boardingStopId}/destinations")
 	public ResponseDTO<List<DestinationStopResponse>> findDestinations(
 			@PathVariable UUID lineId,
-			@PathVariable UUID boardingStopId) {
+			@PathVariable UUID boardingStopId,
+			@RequestParam UUID directionId) {
 		return ResponseDTO.success(transitStopService.findDestinationsAfterBoardingStop(
 				lineId,
+				directionId,
 				boardingStopId));
 	}
 }

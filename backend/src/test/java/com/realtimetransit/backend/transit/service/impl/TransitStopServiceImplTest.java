@@ -68,6 +68,28 @@ class TransitStopServiceImplTest {
 	}
 
 	@Test
+	void refreshesExistingStopsWhenCoordinatesAreMissing() {
+		UUID lineId = UUID.randomUUID();
+		DirectedStopEntity missingCoordinates = new DirectedStopEntity(
+				UUID.randomUUID(), "내선", UUID.randomUUID(), "시청", 1,
+				null, null, null, "내선");
+		DirectedStopEntity refreshed = new DirectedStopEntity(
+				missingCoordinates.getDirectionId(), "내선", missingCoordinates.getStopId(), "시청", 1,
+				new BigDecimal("37.563588"), new BigDecimal("126.975411"), null, "내선");
+		when(transitStopMapper.findActiveStopsByLineId(lineId))
+				.thenReturn(List.of(missingCoordinates), List.of(refreshed));
+
+		assertThat(transitStopService.findActiveStopsByLineId(lineId))
+				.singleElement()
+				.satisfies(stop -> {
+					assertThat(stop.getLatitude()).isEqualByComparingTo("37.563588");
+					assertThat(stop.getLongitude()).isEqualByComparingTo("126.975411");
+				});
+		verify(externalCollectionService).synchronizeRoute(lineId);
+		verify(transitStopMapper, org.mockito.Mockito.times(2)).findActiveStopsByLineId(lineId);
+	}
+
+	@Test
 	void rejectsNullLineIdBeforeCallingMapper() {
 		assertInvalidRequest(() -> transitStopService.findActiveStopsByLineId(null));
 		verifyNoInteractions(transitStopMapper);
@@ -79,11 +101,11 @@ class TransitStopServiceImplTest {
 		UUID boardingStopId = UUID.randomUUID();
 		UUID directionId = UUID.randomUUID();
 		UUID destinationStopId = UUID.randomUUID();
-		when(transitStopMapper.findDestinationsAfterBoardingStop(lineId, boardingStopId))
+		when(transitStopMapper.findDestinationsAfterBoardingStop(lineId, directionId, boardingStopId))
 				.thenReturn(List.of(new DestinationStopEntity(
 						directionId, "종점 방면", destinationStopId, "하차 정류장", 3)));
 
-		assertThat(transitStopService.findDestinationsAfterBoardingStop(lineId, boardingStopId))
+		assertThat(transitStopService.findDestinationsAfterBoardingStop(lineId, directionId, boardingStopId))
 				.singleElement()
 				.satisfies(response -> {
 					assertThat(response.getDirectionId()).isEqualTo(directionId);
@@ -91,28 +113,31 @@ class TransitStopServiceImplTest {
 					assertThat(response.getStopName()).isEqualTo("하차 정류장");
 					assertThat(response.getStopSequence()).isEqualTo(3);
 				});
-		verify(transitStopMapper).findDestinationsAfterBoardingStop(lineId, boardingStopId);
+		verify(transitStopMapper).findDestinationsAfterBoardingStop(lineId, directionId, boardingStopId);
 	}
 
 	@Test
 	void returnsEmptyDestinationListWhenMapperReturnsNoDestinations() {
 		UUID lineId = UUID.randomUUID();
 		UUID boardingStopId = UUID.randomUUID();
-		when(transitStopMapper.findDestinationsAfterBoardingStop(lineId, boardingStopId))
+		UUID directionId = UUID.randomUUID();
+		when(transitStopMapper.findDestinationsAfterBoardingStop(lineId, directionId, boardingStopId))
 				.thenReturn(List.of());
 
-		assertThat(transitStopService.findDestinationsAfterBoardingStop(lineId, boardingStopId))
+		assertThat(transitStopService.findDestinationsAfterBoardingStop(lineId, directionId, boardingStopId))
 				.isEmpty();
-		verify(transitStopMapper).findDestinationsAfterBoardingStop(lineId, boardingStopId);
+		verify(transitStopMapper).findDestinationsAfterBoardingStop(lineId, directionId, boardingStopId);
 	}
 
 	@Test
 	void rejectsNullDestinationInputsBeforeCallingMapper() {
 		UUID lineId = UUID.randomUUID();
+		UUID directionId = UUID.randomUUID();
 		UUID boardingStopId = UUID.randomUUID();
 
-		assertInvalidRequest(() -> transitStopService.findDestinationsAfterBoardingStop(null, boardingStopId));
-		assertInvalidRequest(() -> transitStopService.findDestinationsAfterBoardingStop(lineId, null));
+		assertInvalidRequest(() -> transitStopService.findDestinationsAfterBoardingStop(null, directionId, boardingStopId));
+		assertInvalidRequest(() -> transitStopService.findDestinationsAfterBoardingStop(lineId, null, boardingStopId));
+		assertInvalidRequest(() -> transitStopService.findDestinationsAfterBoardingStop(lineId, directionId, null));
 		verifyNoInteractions(transitStopMapper);
 	}
 

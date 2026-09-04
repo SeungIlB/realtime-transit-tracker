@@ -1,5 +1,6 @@
 package com.realtimetransit.backend.transit.dto.response;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -20,6 +21,8 @@ public class UpcomingArrivalResponse {
 	private Long arrivalPredictionId;
 	private Long vehicleRunObservationId;
 	private String providerVehicleId;
+	private String serviceType;
+	private String alightingStopStatus;
 	private UUID lineId;
 	private UUID boardingStopId;
 	private Instant expectedAt;
@@ -30,7 +33,10 @@ public class UpcomingArrivalResponse {
 	private String confidence;
 	private String movementStatus;
 	private UUID currentStopId;
+	private String currentStopName;
 	private Integer currentSequence;
+	private BigDecimal latitude;
+	private BigDecimal longitude;
 	private Instant observedAt;
 	private Instant receivedAt;
 
@@ -39,6 +45,8 @@ public class UpcomingArrivalResponse {
 				.arrivalPredictionId(entity.getArrivalPredictionId())
 				.vehicleRunObservationId(entity.getVehicleRunObservationId())
 				.providerVehicleId(entity.getProviderVehicleId())
+				.serviceType(entity.getServiceType())
+				.alightingStopStatus(entity.getAlightingStopStatus())
 				.lineId(entity.getLineId())
 				.boardingStopId(entity.getBoardingStopId())
 				.expectedAt(entity.getExpectedAt())
@@ -49,7 +57,10 @@ public class UpcomingArrivalResponse {
 				.confidence(entity.getConfidence())
 				.movementStatus(entity.getMovementStatus())
 				.currentStopId(entity.getCurrentStopId())
+				.currentStopName(entity.getCurrentStopName())
 				.currentSequence(entity.getCurrentSequence())
+				.latitude(entity.getLatitude())
+				.longitude(entity.getLongitude())
 				.observedAt(entity.getObservedAt())
 				.receivedAt(entity.getReceivedAt())
 				.build();

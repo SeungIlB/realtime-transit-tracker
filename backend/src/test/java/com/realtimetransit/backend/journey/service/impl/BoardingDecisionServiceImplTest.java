@@ -40,6 +40,7 @@ import com.realtimetransit.backend.journey.service.validation.JourneySessionVali
 import com.realtimetransit.backend.provider.service.TransitExternalCollectionService;
 import com.realtimetransit.backend.transit.entity.TransitStopEntity;
 import com.realtimetransit.backend.transit.entity.UpcomingArrivalEntity;
+import com.realtimetransit.backend.transit.config.TransitArrivalProperties;
 import com.realtimetransit.backend.transit.repository.ArrivalQueryMapper;
 import com.realtimetransit.backend.transit.repository.TransitStopMapper;
 
@@ -64,6 +65,8 @@ class BoardingDecisionServiceImplTest {
 	@BeforeEach
 	void setUp() {
 		properties = properties();
+		TransitArrivalProperties arrivalProperties = new TransitArrivalProperties();
+		arrivalProperties.setObservationFreshness(Duration.ofMinutes(2));
 		service = new BoardingDecisionServiceImpl(
 				journeySessionValidator,
 				journeyLocationMapper,
@@ -80,7 +83,8 @@ class BoardingDecisionServiceImplTest {
 				new PredictionConfidenceEvaluator(properties),
 				new ObjectMapper(),
 				Clock.fixed(NOW, ZoneOffset.UTC),
-				properties);
+				properties,
+				arrivalProperties);
 	}
 
 	@Test
@@ -100,15 +104,16 @@ class BoardingDecisionServiceImplTest {
 	@Test
 	void retriesCollectionAndReturnsNoVehicleAsNormalState() {
 		JourneySessionEntity journey = stubPredictionInputs();
-		when(arrivalQueryMapper.findUpcomingArrivalsByLineIdAndBoardingStopId(
-				journey.getLineId(), journey.getBoardingStopId(), NOW,
-				NOW.minusSeconds(30), 2)).thenReturn(List.of(), List.of());
+		when(arrivalQueryMapper.findUpcomingArrivalsByLineIdAndBoardingStopIdAndAlightingStopId(
+				journey.getLineId(), journey.getDirectionId(), journey.getBoardingStopId(), journey.getAlightingStopId(), NOW,
+				NOW.minusSeconds(120), 2)).thenReturn(List.of(), List.of());
 
 		var response = service.calculateDecision(journey.getId());
 
 		assertThat(response.getDecision()).isEqualTo("NO_VEHICLE");
 		assertThat(response.getVehicles()).isEmpty();
-		verify(externalCollectionService).collectArrivals(journey.getLineId(), journey.getBoardingStopId());
+		verify(externalCollectionService).collectArrivals(
+				journey.getLineId(), journey.getBoardingStopId(), journey.getAlightingStopId());
 		verifyNoInteractions(boardingPredictionMapper);
 	}
 
@@ -119,15 +124,18 @@ class BoardingDecisionServiceImplTest {
 				.arrivalPredictionId(11L)
 				.vehicleRunObservationId(22L)
 				.providerVehicleId("vehicle-1")
+				.movementStatus("DEPARTED")
+				.currentStopName("이전 정류장")
+				.remainingStops(2)
 				.expectedAt(NOW.plusSeconds(180))
 				.minExpectedAt(NOW.plusSeconds(150))
 				.maxExpectedAt(NOW.plusSeconds(210))
 				.confidence("HIGH")
 				.observedAt(NOW.minusSeconds(5))
 				.build();
-		when(arrivalQueryMapper.findUpcomingArrivalsByLineIdAndBoardingStopId(
-				journey.getLineId(), journey.getBoardingStopId(), NOW,
-				NOW.minusSeconds(30), 2)).thenReturn(List.of(arrival));
+		when(arrivalQueryMapper.findUpcomingArrivalsByLineIdAndBoardingStopIdAndAlightingStopId(
+				journey.getLineId(), journey.getDirectionId(), journey.getBoardingStopId(), journey.getAlightingStopId(), NOW,
+				NOW.minusSeconds(120), 2)).thenReturn(List.of(arrival));
 
 		var response = service.calculateDecision(journey.getId());
 
@@ -135,6 +143,9 @@ class BoardingDecisionServiceImplTest {
 		assertThat(response.getRecommendedVehicleId()).isEqualTo("vehicle-1");
 		assertThat(response.getVehicles()).singleElement()
 				.satisfies(vehicle -> {
+					assertThat(vehicle.getCurrentStopName()).isEqualTo("이전 정류장");
+					assertThat(vehicle.getMovementStatus()).isEqualTo("DEPARTED");
+					assertThat(vehicle.getRemainingStops()).isEqualTo(2);
 					assertThat(vehicle.getPacePredictions()).hasSize(4);
 					assertThat(vehicle.getPacePredictions()).filteredOn(pace -> pace.getRecommended())
 							.hasSize(1);
@@ -189,6 +200,7 @@ class BoardingDecisionServiceImplTest {
 				.travelerProfileId(UUID.randomUUID())
 				.lineId(UUID.randomUUID())
 				.boardingStopId(UUID.randomUUID())
+				.alightingStopId(UUID.randomUUID())
 				.targetProbability(decimal("0.8000"))
 				.status("ACTIVE")
 				.expiresAt(NOW.plusSeconds(300))

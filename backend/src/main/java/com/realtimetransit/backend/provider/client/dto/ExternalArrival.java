@@ -18,6 +18,7 @@ public class ExternalArrival {
 	private String providerVehicleId;
 	private String providerRunId;
 	private String providerDirectionId;
+	private String serviceType;
 	private String destinationProviderStopId;
 	private String currentProviderStopId;
 	private Integer currentSequence;
@@ -29,5 +30,6 @@ public class ExternalArrival {
 	private BigDecimal speedKph;
 	private BigDecimal bearingDegrees;
 	private String positionSource;
+	private String confidence;
 	private Instant observedAt;
 }

@@ -18,12 +18,14 @@ public class ExternalApiQuotaProperties {
 	private long seoulSubwayDailyLimit;
 	private long gbisDailyLimit;
 	private long nationalPrecisionBusDailyLimit;
+	private long railwayTimetableDailyLimit;
 
 	public long dailyLimit(ExternalApiProvider provider) {
 		return switch (provider) {
 			case SEOUL_SUBWAY -> seoulSubwayDailyLimit;
 			case GBIS -> gbisDailyLimit;
 			case NATIONAL_PRECISION_BUS -> nationalPrecisionBusDailyLimit;
+			case RAILWAY_TIMETABLE -> railwayTimetableDailyLimit;
 		};
 	}
 }

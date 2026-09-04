@@ -78,6 +78,7 @@
     </insert>
 
     <select id="findActiveStopsByLineId" resultMap="directedStopMap">
+		WITH ranked_stops AS (
         SELECT
             rd.id AS "directionId",
             rd.display_name AS "directionName",
@@ -87,7 +88,11 @@
             ts.latitude,
             ts.longitude,
             ds.next_stop_id AS "nextStopId",
-            ds.display_direction AS "displayDirection"
+			ds.display_direction AS "displayDirection",
+			ROW_NUMBER() OVER (
+				PARTITION BY rd.line_id, rd.display_name, ds.stop_id
+				ORDER BY ds.stop_sequence, rd.provider_direction_id
+			) AS occurrence
         FROM route_direction rd
         INNER JOIN directed_stop ds
             ON ds.direction_id = rd.id
@@ -95,31 +100,86 @@
             ON ts.id = ds.stop_id
         WHERE rd.line_id = #{lineId}
           AND rd.active = TRUE
-        ORDER BY rd.display_name,
-                 ds.stop_sequence ASC
+		)
+		SELECT
+			"directionId", "directionName", "stopId", "stopName", "stopSequence",
+			latitude, longitude, "nextStopId", "displayDirection"
+		FROM ranked_stops
+		WHERE occurrence = 1
+		ORDER BY "directionName", "stopSequence" ASC
     </select>
 
     <select id="findDestinationsAfterBoardingStop" resultMap="destinationStopMap">
+		WITH boarding_position AS (
+			SELECT rd.id AS direction_id, MIN(boarding.stop_sequence) AS stop_sequence
+			FROM route_direction rd
+			INNER JOIN directed_stop boarding
+				ON boarding.direction_id = rd.id
+			WHERE rd.line_id = #{lineId}
+			  AND rd.id = #{directionId}
+			  AND boarding.stop_id = #{boardingStopId}
+			  AND rd.active = TRUE
+			GROUP BY rd.id
+		), ranked_destinations AS (
         SELECT
             rd.id AS "directionId",
             rd.display_name AS "directionName",
             destination.stop_id AS "stopId",
             destination_stop.public_name AS "stopName",
-            destination.stop_sequence AS "stopSequence"
+			destination.stop_sequence AS "stopSequence",
+			ROW_NUMBER() OVER (
+				PARTITION BY rd.id, destination.stop_id
+				ORDER BY destination.stop_sequence
+			) AS occurrence
         FROM route_direction rd
-        INNER JOIN directed_stop boarding
-            ON boarding.direction_id = rd.id
+		INNER JOIN boarding_position boarding
+			ON boarding.direction_id = rd.id
         INNER JOIN directed_stop destination
-            ON destination.direction_id = boarding.direction_id
+			ON destination.direction_id = rd.id
         INNER JOIN transit_stop destination_stop
             ON destination_stop.id = destination.stop_id
         WHERE rd.line_id = #{lineId}
-          AND boarding.stop_id = #{boardingStopId}
+		  AND rd.id = #{directionId}
           AND rd.active = TRUE
           AND destination.stop_sequence > boarding.stop_sequence
-        ORDER BY rd.display_name,
-                 destination.stop_sequence ASC
+		  AND destination.stop_id != #{boardingStopId}
+		)
+		SELECT "directionId", "directionName", "stopId", "stopName", "stopSequence"
+		FROM ranked_destinations
+		WHERE occurrence = 1
+		ORDER BY "directionName", "stopSequence" ASC
     </select>
+
+	<select id="canReachAlightingBeforeTerminal" resultType="boolean">
+		SELECT EXISTS (
+			SELECT 1
+			FROM route_direction rd
+			INNER JOIN directed_stop boarding
+				ON boarding.direction_id = rd.id
+			   AND boarding.stop_id = #{boardingStopId}
+			INNER JOIN directed_stop alighting
+				ON alighting.direction_id = rd.id
+			   AND alighting.stop_id = #{alightingStopId}
+			INNER JOIN transit_stop terminal_stop
+				ON terminal_stop.provider_id = (
+					SELECT provider_id
+					FROM transit_line
+					WHERE id = #{lineId}
+				)
+			   AND terminal_stop.provider_stop_id = #{terminalProviderStopId}
+			INNER JOIN directed_stop terminal
+				ON terminal.direction_id = rd.id
+			   AND terminal.stop_id = terminal_stop.id
+			WHERE rd.line_id = #{lineId}
+			  AND (
+				rd.provider_direction_id = #{providerDirectionId}
+				OR rd.provider_direction_id LIKE CONCAT(#{providerDirectionId}, ':%')
+			  )
+			  AND rd.active = TRUE
+			  AND alighting.stop_sequence > boarding.stop_sequence
+			  AND alighting.stop_sequence <![CDATA[ <= ]]> terminal.stop_sequence
+		)
+	</select>
 
     <select id="findActiveStopsWithinCoordinateBounds" resultMap="transitStopRowMap">
         SELECT

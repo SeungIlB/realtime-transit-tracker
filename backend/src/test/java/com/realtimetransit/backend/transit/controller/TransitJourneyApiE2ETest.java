@@ -114,10 +114,21 @@ class TransitJourneyApiE2ETest {
 						alightingStopId, boardingStopId, 1, "LOCAL", "APPROACHING",
 						null, null, null, null, "STOP_SEQUENCE", now.minusSeconds(10), now.minusSeconds(5)));
 		arrivalPredictionObservationMapper.insertArrivalPredictionObservation(
-				new ArrivalPredictionObservationEntity(
-						null, null, vehicleObservationId, boardingStopId, now.plusSeconds(300),
-						now.plusSeconds(240), now.plusSeconds(360), 2, "PROVIDER", "HIGH",
-						now.minusSeconds(10), now.minusSeconds(5)));
+				ArrivalPredictionObservationEntity.builder()
+						.vehicleRunObservationId(vehicleObservationId)
+						.boardingStopId(boardingStopId)
+						.requestedAlightingStopId(alightingStopId)
+						.alightingStopConfirmed(true)
+						.alightingStopStatus("STOPS")
+						.expectedAt(now.plusSeconds(300))
+						.minExpectedAt(now.plusSeconds(240))
+						.maxExpectedAt(now.plusSeconds(360))
+						.remainingStops(2)
+						.source("PROVIDER")
+						.confidence("HIGH")
+						.observedAt(now.minusSeconds(10))
+						.receivedAt(now.minusSeconds(5))
+						.build());
 
 		mockMvc.perform(get("/api/v1/lines")
 				.param("provider", "GBIS")
@@ -134,12 +145,14 @@ class TransitJourneyApiE2ETest {
 				.andExpect(jsonPath("$.data[1].stopId").value(alightingStopId.toString()));
 
 		mockMvc.perform(get("/api/v1/lines/{lineId}/stops/{boardingStopId}/destinations",
-				lineId, boardingStopId))
+				lineId, boardingStopId)
+				.param("directionId", directionId.toString()))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.length()").value(1))
 				.andExpect(jsonPath("$.data[0].stopId").value(alightingStopId.toString()));
 
 		mockMvc.perform(get("/api/v1/lines/{lineId}/arrivals", lineId)
+				.param("directionId", directionId.toString())
 				.param("boardingStopId", boardingStopId.toString())
 				.param("alightingStopId", alightingStopId.toString()))
 				.andExpect(status().isOk())

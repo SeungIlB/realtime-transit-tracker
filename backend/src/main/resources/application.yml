@@ -59,7 +59,7 @@ journey:
   boarding-buffer: 15s
   default-vehicle-eta-uncertainty: 45s
   prediction-ttl: 2m
-  decision-refresh-interval: 20s
+  decision-refresh-interval: 1m
   fresh-location-threshold: 30s
   usable-location-threshold: 2m
   high-accuracy-threshold-m: 20.00
@@ -70,10 +70,17 @@ journey:
   default-run-speed-mps: 2.50
 
 transit:
+  arrival:
+    observation-freshness: 2m
+  maintenance:
+    interval: 10m
+    observation-retention: 24h
+    batch-size: 1000
   api-quota:
     seoul-subway-daily-limit: ${SEOUL_SUBWAY_DAILY_CALL_BUDGET:800}
     gbis-daily-limit: ${GBIS_DAILY_CALL_BUDGET:800}
     national-precision-bus-daily-limit: ${NATIONAL_PRECISION_BUS_DAILY_CALL_BUDGET:4000}
+    railway-timetable-daily-limit: ${KRIC_DAILY_CALL_BUDGET:5000}
   providers:
     gbis:
       base-url: https://apis.data.go.kr
@@ -85,3 +92,7 @@ transit:
       base-url: ${SEOUL_SUBWAY_BASE_URL:http://swopenAPI.seoul.go.kr/api/subway}
       reference-base-url: ${SEOUL_OPEN_DATA_BASE_URL:http://openapi.seoul.go.kr:8088}
       service-key: ${SEOUL_SUBWAY_SERVICE_KEY:}
+      reference-service-key: ${SEOUL_SUBWAY_REFERENCE_SERVICE_KEY:${SEOUL_SUBWAY_SERVICE_KEY:}}
+    railway-timetable:
+      base-url: ${KRIC_BASE_URL:https://openapi.kric.go.kr/openapi}
+      service-key: ${KRIC_SERVICE_KEY:}

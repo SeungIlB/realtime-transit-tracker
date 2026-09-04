@@ -12,6 +12,7 @@ public class TransitProviderProperties {
 	private Provider gbis = new Provider();
 	private Provider nationalPrecisionBus = new Provider();
 	private SeoulProvider seoulSubway = new SeoulProvider();
+	private Provider railwayTimetable = new Provider();
 
 	@Getter
 	@Setter
@@ -24,5 +25,6 @@ public class TransitProviderProperties {
 	@Setter
 	public static class SeoulProvider extends Provider {
 		private String referenceBaseUrl = "http://openapi.seoul.go.kr:8088";
+		private String referenceServiceKey;
 	}
 }

@@ -44,6 +44,7 @@ import com.realtimetransit.backend.journey.service.validation.JourneySessionVali
 import com.realtimetransit.backend.provider.service.TransitExternalCollectionService;
 import com.realtimetransit.backend.transit.entity.TransitStopEntity;
 import com.realtimetransit.backend.transit.entity.UpcomingArrivalEntity;
+import com.realtimetransit.backend.transit.config.TransitArrivalProperties;
 import com.realtimetransit.backend.transit.repository.ArrivalQueryMapper;
 import com.realtimetransit.backend.transit.repository.TransitStopMapper;
 
@@ -55,7 +56,7 @@ import tools.jackson.databind.ObjectMapper;
 @Service
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
-@EnableConfigurationProperties(JourneyProperties.class)
+@EnableConfigurationProperties({JourneyProperties.class, TransitArrivalProperties.class})
 public class BoardingDecisionServiceImpl implements BoardingDecisionService {
 
 	private static final int ARRIVAL_LIMIT = 2;
@@ -77,6 +78,7 @@ public class BoardingDecisionServiceImpl implements BoardingDecisionService {
 	private final ObjectMapper objectMapper;
 	private final Clock clock;
 	private final JourneyProperties properties;
+	private final TransitArrivalProperties arrivalProperties;
 
 	@Override
 	@Transactional
@@ -126,17 +128,32 @@ public class BoardingDecisionServiceImpl implements BoardingDecisionService {
 	private List<UpcomingArrivalEntity> findArrivalCandidates(
 			JourneySessionEntity journey,
 			Instant calculatedAt) {
-		Instant observedAfter = calculatedAt.minus(properties.getFreshLocationThreshold());
-		List<UpcomingArrivalEntity> arrivals = arrivalQueryMapper
-				.findUpcomingArrivalsByLineIdAndBoardingStopId(
-						journey.getLineId(), journey.getBoardingStopId(), calculatedAt,
-						observedAfter, ARRIVAL_LIMIT);
-		if (!arrivals.isEmpty()) {
-			return arrivals;
+		Instant observedAfter = calculatedAt.minus(arrivalProperties.getObservationFreshness());
+		List<UpcomingArrivalEntity> storedArrivals = findStoredArrivalCandidates(
+				journey, calculatedAt, observedAfter);
+		try {
+			externalCollectionService.collectArrivals(
+					journey.getLineId(), journey.getBoardingStopId(), journey.getAlightingStopId());
+		} catch (BusinessException exception) {
+			if (!storedArrivals.isEmpty()) return storedArrivals;
+			throw exception;
 		}
-		externalCollectionService.collectArrivals(journey.getLineId(), journey.getBoardingStopId());
-		return arrivalQueryMapper.findUpcomingArrivalsByLineIdAndBoardingStopId(
-				journey.getLineId(), journey.getBoardingStopId(), calculatedAt,
+		List<UpcomingArrivalEntity> refreshedArrivals = findStoredArrivalCandidates(
+				journey, calculatedAt, observedAfter);
+		return refreshedArrivals.isEmpty() ? storedArrivals : refreshedArrivals;
+	}
+
+	private List<UpcomingArrivalEntity> findStoredArrivalCandidates(
+			JourneySessionEntity journey,
+			Instant calculatedAt,
+			Instant observedAfter) {
+		if (journey.getAlightingStopId() == null) {
+			return arrivalQueryMapper.findUpcomingArrivalsByLineIdAndBoardingStopId(
+					journey.getLineId(), journey.getDirectionId(), journey.getBoardingStopId(), calculatedAt,
+					observedAfter, ARRIVAL_LIMIT);
+		}
+		return arrivalQueryMapper.findUpcomingArrivalsByLineIdAndBoardingStopIdAndAlightingStopId(
+				journey.getLineId(), journey.getDirectionId(), journey.getBoardingStopId(), journey.getAlightingStopId(), calculatedAt,
 				observedAfter, ARRIVAL_LIMIT);
 	}
 
@@ -283,6 +300,15 @@ public class BoardingDecisionServiceImpl implements BoardingDecisionService {
 				.arrivalPredictionId(calculation.getArrival().getArrivalPredictionId())
 				.vehicleRunObservationId(calculation.getArrival().getVehicleRunObservationId())
 				.providerVehicleId(calculation.getArrival().getProviderVehicleId())
+				.serviceType(calculation.getArrival().getServiceType())
+				.alightingStopStatus(calculation.getArrival().getAlightingStopStatus())
+				.movementStatus(calculation.getArrival().getMovementStatus())
+				.currentStopName(calculation.getArrival().getCurrentStopName())
+				.currentSequence(calculation.getArrival().getCurrentSequence())
+				.remainingStops(calculation.getArrival().getRemainingStops())
+				.latitude(calculation.getArrival().getLatitude())
+				.longitude(calculation.getArrival().getLongitude())
+				.observedAt(calculation.getArrival().getObservedAt())
 				.vehicleMinExpectedAt(calculation.getVehicleEta().getMinExpectedAt())
 				.vehicleExpectedAt(calculation.getVehicleEta().getExpectedAt())
 				.vehicleMaxExpectedAt(calculation.getVehicleEta().getMaxExpectedAt())

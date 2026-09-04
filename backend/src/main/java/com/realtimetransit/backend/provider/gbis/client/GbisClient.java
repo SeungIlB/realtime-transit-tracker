@@ -9,6 +9,7 @@ import java.util.Map;
 
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.CacheManager;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
@@ -40,14 +41,16 @@ public class GbisClient extends ProviderClientSupport implements TransitProvider
 	private final RestClient restClient;
 	private final String serviceKey;
 	private final Clock clock;
+	private final CacheManager cacheManager;
 
 	public GbisClient(RestClient.Builder builder, ExternalApiQuotaService quotaService,
-			TransitProviderProperties properties, Clock clock) {
+			TransitProviderProperties properties, Clock clock, CacheManager cacheManager) {
 		super(quotaService);
 		var config = properties.getGbis();
 		this.restClient = builder.baseUrl(config.getBaseUrl()).build();
 		this.serviceKey = decodeServiceKey(config.getServiceKey());
 		this.clock = clock;
+		this.cacheManager = cacheManager;
 	}
 
 	@Override
@@ -74,7 +77,7 @@ public class GbisClient extends ProviderClientSupport implements TransitProvider
 	@Cacheable(cacheNames = TransitCacheNames.TRANSIT_STATIC_DATA, key = "'GBIS:route:' + #providerLineId")
 	public ExternalRouteReference fetchRoute(String providerLineId) {
 		JsonNode info = first(call(ROUTE_INFO, "routeId", providerLineId), "busRouteInfoItem");
-		List<JsonNode> stationNodes = list(call(ROUTE_STOPS, "routeId", providerLineId), "busRouteStationList");
+		List<JsonNode> stationNodes = routeStationNodes(providerLineId);
 		List<ExternalStop> allStops = stationNodes.stream().map(this::toStop)
 				.sorted(Comparator.comparingInt(ExternalStop::getSequence)).toList();
 		int turnSequence = integer(info, "turnSeq") == null ? findTurnSequence(stationNodes, allStops.size()) : integer(info, "turnSeq");
@@ -88,19 +91,40 @@ public class GbisClient extends ProviderClientSupport implements TransitProvider
 	@Override
 	@Cacheable(cacheNames = TransitCacheNames.GBIS_ARRIVALS, key = "#providerLineId + ':' + #providerStopId")
 	public List<ExternalArrival> fetchArrivals(String providerLineId, String providerStopId) {
-		List<JsonNode> stationNodes = list(call(ROUTE_STOPS, "routeId", providerLineId), "busRouteStationList");
-		JsonNode station = stationNodes.stream().filter(item -> providerStopId.equals(text(item, "stationId"))).findFirst()
-				.orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "GBIS station " + providerStopId));
-		String sequence = text(station, "stationSeq");
+		List<JsonNode> stationNodes = routeStationNodes(providerLineId);
+		List<JsonNode> matchingStations = stationNodes.stream()
+				.filter(item -> providerStopId.equals(text(item, "stationId")))
+				.toList();
+		if (matchingStations.isEmpty()) {
+			throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "GBIS station " + providerStopId);
+		}
 		int turnSequence = findTurnSequence(stationNodes, Integer.MAX_VALUE);
-		String directionId = integer(station, "stationSeq") != null && integer(station, "stationSeq") > turnSequence
-				? "INBOUND" : "OUTBOUND";
 		Map<String, JsonNode> locationsByPlate = locationsByPlate(providerLineId);
-		JsonNode item = first(callArrival(providerLineId, providerStopId, sequence), "busArrivalItem");
 		List<ExternalArrival> arrivals = new ArrayList<>();
-		addArrival(arrivals, item, 1, directionId, locationsByPlate);
-		addArrival(arrivals, item, 2, directionId, locationsByPlate);
+		for (JsonNode station : matchingStations) {
+			Integer stationSequence = integer(station, "stationSeq");
+			String directionId = stationSequence != null && stationSequence > turnSequence
+					? "INBOUND" : "OUTBOUND";
+			JsonNode item = first(callArrival(
+					providerLineId, providerStopId, text(station, "stationSeq")), "busArrivalItem");
+			addArrival(arrivals, item, 1, directionId, locationsByPlate);
+			addArrival(arrivals, item, 2, directionId, locationsByPlate);
+		}
 		return arrivals;
+	}
+
+	@SuppressWarnings("unchecked")
+	private List<JsonNode> routeStationNodes(String providerLineId) {
+		var cache = cacheManager.getCache(TransitCacheNames.TRANSIT_STATIC_DATA);
+		if (cache == null) {
+			return list(call(ROUTE_STOPS, "routeId", providerLineId), "busRouteStationList");
+		}
+		String cacheKey = "GBIS:raw-route-stops:v1:" + providerLineId;
+		var cached = cache.get(cacheKey);
+		if (cached != null) return (List<JsonNode>) cached.get();
+		List<JsonNode> loaded = list(call(ROUTE_STOPS, "routeId", providerLineId), "busRouteStationList");
+		cache.put(cacheKey, loaded);
+		return loaded;
 	}
 
 	private Map<String, JsonNode> locationsByPlate(String routeId) {

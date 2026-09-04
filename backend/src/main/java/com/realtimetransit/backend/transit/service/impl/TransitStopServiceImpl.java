@@ -11,6 +11,7 @@ import com.realtimetransit.backend.common.error.ErrorCode;
 import com.realtimetransit.backend.provider.service.TransitExternalCollectionService;
 import com.realtimetransit.backend.transit.dto.response.DestinationStopResponse;
 import com.realtimetransit.backend.transit.dto.response.DirectedStopResponse;
+import com.realtimetransit.backend.transit.entity.DirectedStopEntity;
 import com.realtimetransit.backend.transit.repository.TransitStopMapper;
 import com.realtimetransit.backend.transit.service.TransitStopService;
 
@@ -29,7 +30,7 @@ public class TransitStopServiceImpl implements TransitStopService {
 	public List<DirectedStopResponse> findActiveStopsByLineId(UUID lineId) {
 		validateRequiredId(lineId, "lineId");
 		var stops = transitStopMapper.findActiveStopsByLineId(lineId);
-		if (stops.isEmpty()) {
+		if (stops.isEmpty() || stops.stream().noneMatch(TransitStopServiceImpl::hasCoordinates)) {
 			externalCollectionService.synchronizeRoute(lineId);
 			stops = transitStopMapper.findActiveStopsByLineId(lineId);
 		}
@@ -42,11 +43,13 @@ public class TransitStopServiceImpl implements TransitStopService {
 	@Transactional
 	public List<DestinationStopResponse> findDestinationsAfterBoardingStop(
 			UUID lineId,
+			UUID directionId,
 			UUID boardingStopId) {
 		validateRequiredId(lineId, "lineId");
+		validateRequiredId(directionId, "directionId");
 		validateRequiredId(boardingStopId, "boardingStopId");
 
-		return transitStopMapper.findDestinationsAfterBoardingStop(lineId, boardingStopId).stream()
+		return transitStopMapper.findDestinationsAfterBoardingStop(lineId, directionId, boardingStopId).stream()
 				.map(DestinationStopResponse::from)
 				.toList();
 	}
@@ -55,5 +58,9 @@ public class TransitStopServiceImpl implements TransitStopService {
 		if (value == null) {
 			throw new BusinessException(ErrorCode.INVALID_REQUEST, fieldName + " is required");
 		}
+	}
+
+	private static boolean hasCoordinates(DirectedStopEntity stop) {
+		return stop.getLatitude() != null && stop.getLongitude() != null;
 	}
 }
