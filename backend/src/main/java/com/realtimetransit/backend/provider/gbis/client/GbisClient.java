@@ -98,17 +98,20 @@ public class GbisClient extends ProviderClientSupport implements TransitProvider
 		if (matchingStations.isEmpty()) {
 			throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "GBIS station " + providerStopId);
 		}
-		int turnSequence = findTurnSequence(stationNodes, Integer.MAX_VALUE);
+		int turnSequence = findTurnSequence(stationNodes, -1);
+		if (turnSequence < 0) {
+			JsonNode routeInfo = first(call(ROUTE_INFO, "routeId", providerLineId), "busRouteInfoItem");
+			Integer configuredTurnSequence = integer(routeInfo, "turnSeq");
+			turnSequence = configuredTurnSequence == null ? Integer.MAX_VALUE : configuredTurnSequence;
+		}
 		Map<String, JsonNode> locationsByPlate = locationsByPlate(providerLineId);
 		List<ExternalArrival> arrivals = new ArrayList<>();
 		for (JsonNode station : matchingStations) {
 			Integer stationSequence = integer(station, "stationSeq");
-			String directionId = stationSequence != null && stationSequence > turnSequence
-					? "INBOUND" : "OUTBOUND";
 			JsonNode item = first(callArrival(
 					providerLineId, providerStopId, text(station, "stationSeq")), "busArrivalItem");
-			addArrival(arrivals, item, 1, directionId, locationsByPlate);
-			addArrival(arrivals, item, 2, directionId, locationsByPlate);
+			addArrival(arrivals, item, 1, stationSequence, turnSequence, locationsByPlate);
+			addArrival(arrivals, item, 2, stationSequence, turnSequence, locationsByPlate);
 		}
 		return arrivals;
 	}
@@ -186,11 +189,15 @@ public class GbisClient extends ProviderClientSupport implements TransitProvider
 	}
 
 	private void addArrival(List<ExternalArrival> target, JsonNode item, int index,
-			String directionId, Map<String, JsonNode> locationsByPlate) {
+			Integer targetSequence, int turnSequence, Map<String, JsonNode> locationsByPlate) {
 		String vehicleId = text(item, "plateNo" + index);
 		Integer minutes = integer(item, "predictTime" + index);
 		if (vehicleId == null || vehicleId.isBlank() || minutes == null) return;
 		JsonNode location = locationsByPlate.get(vehicleId);
+		String directionId = directionId(
+				targetSequence,
+				location == null ? null : integer(location, "stationSeq"),
+				turnSequence);
 		target.add(ExternalArrival.builder().providerVehicleId(vehicleId)
 				.providerRunId(location == null ? vehicleId : fallback(text(location, "vehId"), vehicleId))
 				.providerDirectionId(directionId)
@@ -201,6 +208,15 @@ public class GbisClient extends ProviderClientSupport implements TransitProvider
 				.movementStatus(location == null ? "BETWEEN" : movementStatus(text(location, "stateCd")))
 				.positionSource(location == null ? "ESTIMATED" : "STOP_SEQUENCE")
 				.observedAt(clock.instant()).build());
+	}
+
+	static String directionId(Integer targetSequence, Integer currentSequence, int turnSequence) {
+		if (targetSequence == null || turnSequence == Integer.MAX_VALUE) {
+			return "OUTBOUND";
+		}
+		if (targetSequence > turnSequence) return "INBOUND";
+		if (targetSequence < turnSequence) return "OUTBOUND";
+		return currentSequence != null && currentSequence > turnSequence ? "INBOUND" : "OUTBOUND";
 	}
 
 	private static String movementStatus(String stateCode) {

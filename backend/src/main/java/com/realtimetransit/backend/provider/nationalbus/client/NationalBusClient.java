@@ -105,8 +105,9 @@ public class NationalBusClient extends ProviderClientSupport implements TransitP
 		BigDecimal latitude = decimal(item, "lat");
 		BigDecimal longitude = decimal(item, "lot");
 		if (latitude == null || longitude == null) return null;
+		BigDecimal bearingDegrees = decimal(item, "oprDrct");
 		RouteProgress progress = directions.stream()
-				.map(direction -> progress(direction, providerStopId, latitude, longitude))
+				.map(direction -> progress(direction, providerStopId, latitude, longitude, bearingDegrees))
 				.filter(java.util.Objects::nonNull)
 				.min(Comparator.comparingDouble(RouteProgress::getProjectionDistanceM))
 				.orElse(null);
@@ -129,7 +130,7 @@ public class NationalBusClient extends ProviderClientSupport implements TransitP
 				.latitude(latitude)
 				.longitude(longitude)
 				.speedKph(reportedSpeed)
-				.bearingDegrees(decimal(item, "oprDrct"))
+				.bearingDegrees(bearingDegrees)
 				.positionSource(positionSource(text(item, "evtType")))
 				.confidence("LOW")
 				.observedAt(observedAt)
@@ -141,29 +142,50 @@ public class NationalBusClient extends ProviderClientSupport implements TransitP
 			String providerStopId,
 			BigDecimal latitude,
 			BigDecimal longitude) {
+		return progress(direction, providerStopId, latitude, longitude, null);
+	}
+
+	static RouteProgress progress(
+			ExternalDirection direction,
+			String providerStopId,
+			BigDecimal latitude,
+			BigDecimal longitude,
+			BigDecimal vehicleBearingDegrees) {
 		List<ExternalStop> stops = direction.getStops();
+		if (stops.isEmpty()) return null;
+		RouteProjection projection = closestProjection(
+				stops, latitude, longitude, vehicleBearingDegrees);
+		if (projection == null && vehicleBearingDegrees != null) {
+			projection = closestProjection(stops, latitude, longitude, null);
+		}
+		if (projection == null) return null;
+
+		double routePosition = projection.getSegmentIndex() + projection.getFraction();
 		int targetIndex = -1;
 		for (int index = 0; index < stops.size(); index++) {
-			if (providerStopId.equals(stops.get(index).getProviderStopId())) {
+			if (providerStopId.equals(stops.get(index).getProviderStopId())
+					&& index + 1.0e-6 >= routePosition) {
 				targetIndex = index;
 				break;
 			}
 		}
 		if (targetIndex < 0) return null;
-		int currentIndex = -1;
-		double projectionDistance = Double.MAX_VALUE;
-		for (int index = 0; index < stops.size(); index++) {
-			ExternalStop stop = stops.get(index);
-			if (stop.getLatitude() == null || stop.getLongitude() == null) continue;
-			double distance = distanceMeters(latitude, longitude, stop.getLatitude(), stop.getLongitude());
-			if (distance < projectionDistance) {
-				projectionDistance = distance;
-				currentIndex = index;
-			}
+
+		int projectedStopIndex = projection.getFraction() >= 1 - 1.0e-6
+				? projection.getSegmentIndex() + 1
+				: projection.getSegmentIndex();
+		int currentIndex = Math.min(projectedStopIndex, targetIndex);
+		double remainingDistance = 0;
+		int nextSegmentIndex = projection.getSegmentIndex();
+		if (projection.getSegmentIndex() < targetIndex) {
+			ExternalStop from = stops.get(projection.getSegmentIndex());
+			ExternalStop to = stops.get(projection.getSegmentIndex() + 1);
+			remainingDistance = distanceMeters(
+					from.getLatitude(), from.getLongitude(), to.getLatitude(), to.getLongitude())
+					* (1 - projection.getFraction());
+			nextSegmentIndex++;
 		}
-		if (currentIndex < 0 || currentIndex > targetIndex) return null;
-		double remainingDistance = projectionDistance;
-		for (int index = currentIndex; index < targetIndex; index++) {
+		for (int index = nextSegmentIndex; index < targetIndex; index++) {
 			ExternalStop from = stops.get(index);
 			ExternalStop to = stops.get(index + 1);
 			if (from.getLatitude() == null || from.getLongitude() == null
@@ -172,7 +194,74 @@ public class NationalBusClient extends ProviderClientSupport implements TransitP
 					from.getLatitude(), from.getLongitude(), to.getLatitude(), to.getLongitude());
 		}
 		return new RouteProgress(direction, stops.get(currentIndex), currentIndex, targetIndex,
-				projectionDistance, remainingDistance);
+				projection.getDistanceM(), remainingDistance);
+	}
+
+	private static RouteProjection closestProjection(
+			List<ExternalStop> stops,
+			BigDecimal latitude,
+			BigDecimal longitude,
+			BigDecimal vehicleBearingDegrees) {
+		if (stops.size() == 1) {
+			ExternalStop stop = stops.getFirst();
+			if (stop.getLatitude() == null || stop.getLongitude() == null) return null;
+			return new RouteProjection(0, 0,
+					distanceMeters(latitude, longitude, stop.getLatitude(), stop.getLongitude()));
+		}
+		RouteProjection closest = null;
+		for (int index = 0; index < stops.size() - 1; index++) {
+			ExternalStop from = stops.get(index);
+			ExternalStop to = stops.get(index + 1);
+			if (from.getLatitude() == null || from.getLongitude() == null
+					|| to.getLatitude() == null || to.getLongitude() == null) continue;
+			if (vehicleBearingDegrees != null && angularDifference(
+					vehicleBearingDegrees.doubleValue(), bearing(from, to)) > 100) continue;
+			double fraction = projectionFraction(latitude, longitude, from, to);
+			BigDecimal projectedLatitude = interpolate(from.getLatitude(), to.getLatitude(), fraction);
+			BigDecimal projectedLongitude = interpolate(from.getLongitude(), to.getLongitude(), fraction);
+			double distance = distanceMeters(latitude, longitude, projectedLatitude, projectedLongitude);
+			if (closest == null || distance < closest.getDistanceM()) {
+				closest = new RouteProjection(index, fraction, distance);
+			}
+		}
+		return closest;
+	}
+
+	private static double projectionFraction(
+			BigDecimal latitude,
+			BigDecimal longitude,
+			ExternalStop from,
+			ExternalStop to) {
+		double referenceLatitude = Math.toRadians(
+				(from.getLatitude().doubleValue() + to.getLatitude().doubleValue()) / 2);
+		double segmentX = (to.getLongitude().doubleValue() - from.getLongitude().doubleValue())
+				* Math.cos(referenceLatitude);
+		double segmentY = to.getLatitude().doubleValue() - from.getLatitude().doubleValue();
+		double pointX = (longitude.doubleValue() - from.getLongitude().doubleValue())
+				* Math.cos(referenceLatitude);
+		double pointY = latitude.doubleValue() - from.getLatitude().doubleValue();
+		double denominator = segmentX * segmentX + segmentY * segmentY;
+		if (denominator == 0) return 0;
+		return Math.clamp((pointX * segmentX + pointY * segmentY) / denominator, 0, 1);
+	}
+
+	private static BigDecimal interpolate(BigDecimal from, BigDecimal to, double fraction) {
+		return BigDecimal.valueOf(from.doubleValue() + (to.doubleValue() - from.doubleValue()) * fraction);
+	}
+
+	private static double bearing(ExternalStop from, ExternalStop to) {
+		double lat1 = Math.toRadians(from.getLatitude().doubleValue());
+		double lat2 = Math.toRadians(to.getLatitude().doubleValue());
+		double longitudeDelta = Math.toRadians(to.getLongitude().doubleValue() - from.getLongitude().doubleValue());
+		double y = Math.sin(longitudeDelta) * Math.cos(lat2);
+		double x = Math.cos(lat1) * Math.sin(lat2)
+				- Math.sin(lat1) * Math.cos(lat2) * Math.cos(longitudeDelta);
+		return (Math.toDegrees(Math.atan2(y, x)) + 360) % 360;
+	}
+
+	private static double angularDifference(double first, double second) {
+		double difference = Math.abs((first - second) % 360);
+		return difference > 180 ? 360 - difference : difference;
 	}
 
 	private static double distanceMeters(
@@ -300,6 +389,14 @@ public class NationalBusClient extends ProviderClientSupport implements TransitP
 			if (parts.length != 2) throw new BusinessException(ErrorCode.INVALID_REQUEST, "Invalid national route ID");
 			return new ProviderLineKey(parts[0], parts[1]);
 		}
+	}
+
+	@lombok.Getter
+	@lombok.AllArgsConstructor
+	static final class RouteProjection {
+		private final int segmentIndex;
+		private final double fraction;
+		private final double distanceM;
 	}
 
 	@lombok.Getter
