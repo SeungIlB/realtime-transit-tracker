@@ -13,9 +13,11 @@ import java.util.Comparator;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 
 import com.realtimetransit.backend.common.error.BusinessException;
 import com.realtimetransit.backend.provider.client.dto.ExternalArrival;
+import com.realtimetransit.backend.provider.client.TransitProviderProperties;
 import com.realtimetransit.backend.provider.kric.client.KricRailwayTimetableClient;
 import com.realtimetransit.backend.provider.kric.dto.KricStation;
 import com.realtimetransit.backend.provider.kric.dto.KricTimetableCall;
@@ -33,6 +35,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@EnableConfigurationProperties(TransitProviderProperties.class)
 public class SubwayStopConfirmationServiceImpl implements SubwayStopConfirmationService {
 
 	private static final ZoneId KOREA_ZONE = ZoneId.of("Asia/Seoul");
@@ -42,6 +45,7 @@ public class SubwayStopConfirmationServiceImpl implements SubwayStopConfirmation
 
 	private final KricRailwayTimetableClient timetableClient;
 	private final TransitStopMapper transitStopMapper;
+	private final TransitProviderProperties providerProperties;
 
 	@Override
 	public AlightingStopStatus confirmAlightingStop(
@@ -213,8 +217,12 @@ public class SubwayStopConfirmationServiceImpl implements SubwayStopConfirmation
 		return null;
 	}
 
-	private static List<Integer> dayCodes(Instant expectedAt) {
-		DayOfWeek day = expectedAt.atZone(KOREA_ZONE).getDayOfWeek();
+	private List<Integer> dayCodes(Instant expectedAt) {
+		LocalDate serviceDate = expectedAt.atZone(KOREA_ZONE).toLocalDate();
+		if (providerProperties.getRailwayTimetable().getHolidayDates().contains(serviceDate)) {
+			return List.of(9);
+		}
+		DayOfWeek day = serviceDate.getDayOfWeek();
 		int primary = switch (day) {
 			case SATURDAY -> 7;
 			case SUNDAY -> 9;

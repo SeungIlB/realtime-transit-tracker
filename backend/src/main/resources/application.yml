@@ -96,3 +96,4 @@ transit:
     railway-timetable:
       base-url: ${KRIC_BASE_URL:https://openapi.kric.go.kr/openapi}
       service-key: ${KRIC_SERVICE_KEY:}
+      holiday-dates: ${KRIC_HOLIDAY_DATES:}

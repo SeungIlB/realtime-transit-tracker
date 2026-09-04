@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -13,6 +14,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.realtimetransit.backend.provider.client.dto.ExternalArrival;
+import com.realtimetransit.backend.provider.client.TransitProviderProperties;
 import com.realtimetransit.backend.provider.kric.client.KricRailwayTimetableClient;
 import com.realtimetransit.backend.provider.kric.dto.KricStation;
 import com.realtimetransit.backend.provider.kric.dto.KricTimetableCall;
@@ -34,10 +36,25 @@ class SubwayStopConfirmationServiceImplTest {
 	private TransitStopMapper transitStopMapper;
 
 	private SubwayStopConfirmationServiceImpl service;
+	private TransitProviderProperties providerProperties;
 
 	@BeforeEach
 	void setUp() {
-		service = new SubwayStopConfirmationServiceImpl(timetableClient, transitStopMapper);
+		providerProperties = new TransitProviderProperties();
+		service = new SubwayStopConfirmationServiceImpl(timetableClient, transitStopMapper, providerProperties);
+	}
+
+	@Test
+	void usesHolidayTimetableCodeForConfiguredPublicHoliday() {
+		providerProperties.getRailwayTimetable().getHolidayDates().add(LocalDate.of(2026, 9, 3));
+		stubStationsAndConfiguration();
+		when(timetableClient.findTimetable(BOARDING_STATION, 9))
+				.thenReturn(List.of(call("1096", "16:20:00")));
+		when(timetableClient.findTimetable(ALIGHTING_STATION, 9))
+				.thenReturn(List.of(call("1096", "16:48:00")));
+
+		assertThat(service.confirmAlightingStop(line(), boardingStop(), alightingStop(), arrival("EXPRESS")))
+				.isEqualTo(AlightingStopStatus.STOPS);
 	}
 
 	@Test
