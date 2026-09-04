@@ -52,9 +52,25 @@
     </select>
 
     <select id="validateJourneyStopsOnSameDirection" resultMap="journeyStopValidationMap">
+		WITH boarding_position AS (
+			SELECT
+				rd.line_id,
+				rd.id AS direction_id,
+				boarding.stop_id,
+				MIN(boarding.stop_sequence) AS stop_sequence
+			FROM route_direction rd
+			INNER JOIN directed_stop boarding
+				ON boarding.direction_id = rd.id
+			   AND boarding.line_id = rd.line_id
+			WHERE rd.line_id = #{lineId}
+			  AND rd.id = #{directionId}
+			  AND rd.active = TRUE
+			  AND boarding.stop_id = #{boardingStopId}
+			GROUP BY rd.line_id, rd.id, boarding.stop_id
+		)
         SELECT
-            rd.line_id AS "lineId",
-            rd.id AS "directionId",
+            boarding.line_id AS "lineId",
+            boarding.direction_id AS "directionId",
             boarding.stop_id AS "boardingStopId",
             boarding.stop_sequence AS "boardingSequence",
             <choose>
@@ -67,21 +83,19 @@
                     CAST(NULL AS INTEGER) AS "alightingSequence"
                 </otherwise>
             </choose>
-        FROM route_direction rd
-        INNER JOIN directed_stop boarding
-            ON boarding.direction_id = rd.id
-           AND boarding.line_id = rd.line_id
+        FROM boarding_position boarding
         <if test="alightingStopId != null">
-            INNER JOIN directed_stop alighting
-                ON alighting.direction_id = rd.id
-               AND alighting.line_id = rd.line_id
-               AND alighting.stop_id = #{alightingStopId}
-               AND alighting.stop_sequence > boarding.stop_sequence
+            INNER JOIN LATERAL (
+				SELECT candidate.stop_id, candidate.stop_sequence
+				FROM directed_stop candidate
+				WHERE candidate.direction_id = boarding.direction_id
+				  AND candidate.line_id = boarding.line_id
+				  AND candidate.stop_id = #{alightingStopId}
+				  AND candidate.stop_sequence > boarding.stop_sequence
+				ORDER BY candidate.stop_sequence
+				LIMIT 1
+			) alighting ON TRUE
         </if>
-        WHERE rd.line_id = #{lineId}
-          AND rd.id = #{directionId}
-          AND rd.active = TRUE
-          AND boarding.stop_id = #{boardingStopId}
     </select>
 
     <update id="updateJourneySessionStatus">

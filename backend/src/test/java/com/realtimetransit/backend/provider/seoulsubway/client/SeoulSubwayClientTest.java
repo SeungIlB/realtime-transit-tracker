@@ -151,6 +151,29 @@ class SeoulSubwayClientTest {
 				.containsExactly("성수", "용답", "신답");
 	}
 
+	@Test
+	void branchesFiveLineAtGangdongWithoutAddingGilDongToMacheonPath() throws Exception {
+		List<JsonNode> rows = List.of(
+				station("548", "강동", "2548"),
+				station("549", "길동", "2549"),
+				station("550", "굽은다리", "2550"),
+				station("P549", "둔촌동", "2562"),
+				station("P550", "올림픽공원", "2563"));
+
+		var directions = SeoulSubwayClient.fiveLineDirections(rows, new HashMap<>(), new HashMap<>());
+		var hanam = directions.stream()
+				.filter(direction -> "DOWN:HANAM".equals(direction.getProviderDirectionId()))
+				.findFirst().orElseThrow();
+		var macheon = directions.stream()
+				.filter(direction -> "DOWN:MACHEON".equals(direction.getProviderDirectionId()))
+				.findFirst().orElseThrow();
+
+		assertThat(hanam.getStops()).extracting(stop -> stop.getPublicName())
+				.containsExactly("강동", "길동", "굽은다리");
+		assertThat(macheon.getStops()).extracting(stop -> stop.getPublicName())
+				.containsExactly("강동", "둔촌동", "올림픽공원");
+	}
+
 	private JsonNode station(String externalCode, String name, String stationCode) throws Exception {
 		return objectMapper.readTree("""
 				{"FR_CODE":"%s","STATION_NM":"%s","STATION_CD":"%s"}

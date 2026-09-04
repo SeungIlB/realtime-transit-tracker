@@ -72,7 +72,7 @@ public class SeoulSubwayClient extends ProviderClientSupport implements TransitP
 	}
 
 	@Override
-	@Cacheable(cacheNames = TransitCacheNames.TRANSIT_STATIC_DATA, key = "'SEOUL:route:v4:' + #providerLineId")
+	@Cacheable(cacheNames = TransitCacheNames.TRANSIT_STATIC_DATA, key = "'SEOUL:route:v5:' + #providerLineId")
 	public ExternalRouteReference fetchRoute(String providerLineId) {
 		List<JsonNode> rows = referenceClient.findAllLineStations().stream()
 				.filter(row -> providerLineId.equals(text(row, "LINE_NUM")))
@@ -179,10 +179,10 @@ public class SeoulSubwayClient extends ProviderClientSupport implements TransitP
 			Map<String, JsonNode> coordinatesByStationId,
 			Map<String, JsonNode> coordinatesByStationName) {
 		List<JsonNode> trunk = rows.stream()
-				.filter(row -> isPlainCodeInRange(code(row), 510, 549))
+				.filter(row -> isPlainCodeInRange(code(row), 510, 548))
 				.sorted(Comparator.comparingInt(SeoulSubwayClient::stationOrder)).toList();
 		List<JsonNode> hanam = rows.stream()
-				.filter(row -> isPlainCodeInRange(code(row), 550, 558))
+				.filter(row -> isPlainCodeInRange(code(row), 549, 558))
 				.sorted(Comparator.comparingInt(SeoulSubwayClient::stationOrder)).toList();
 		List<JsonNode> macheon = rows.stream()
 				.filter(row -> code(row) != null && code(row).matches("P\\d+"))

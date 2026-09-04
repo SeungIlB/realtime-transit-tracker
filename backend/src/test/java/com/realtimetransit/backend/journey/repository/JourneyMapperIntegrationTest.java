@@ -140,6 +140,28 @@ class JourneyMapperIntegrationTest {
 	}
 
 	@Test
+	void validatesOneJourneyPositionWhenCircularDirectionRepeatsStops() {
+		TransitFixture fixture = transitFixture("circular-journey");
+		directedStopMapper.upsertDirectedStop(new DirectedStopAssignmentEntity(
+				UUID.randomUUID(), fixture.getLineId(), fixture.getDirectionId(),
+				fixture.getBoardingStopId(), 3, fixture.getAlightingStopId(),
+				"loop-platform-3", "순환", "loop-segment-3"));
+		directedStopMapper.upsertDirectedStop(new DirectedStopAssignmentEntity(
+				UUID.randomUUID(), fixture.getLineId(), fixture.getDirectionId(),
+				fixture.getAlightingStopId(), 4, null,
+				"loop-platform-4", "순환", "loop-segment-4"));
+
+		assertThat(journeyMapper.validateJourneyStopsOnSameDirection(
+				fixture.getLineId(), fixture.getDirectionId(),
+				fixture.getBoardingStopId(), fixture.getAlightingStopId()))
+				.get()
+				.satisfies(validation -> {
+					assertThat(validation.getBoardingSequence()).isEqualTo(1);
+					assertThat(validation.getAlightingSequence()).isEqualTo(2);
+				});
+	}
+
+	@Test
 	void returnsLatestUnexpiredLocationAndDeletesExpiredLocationsInBatches() {
 		TransitFixture fixture = transitFixture("location");
 		Instant now = Instant.now();
