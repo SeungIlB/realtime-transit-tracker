@@ -134,3 +134,51 @@ test('uses a searched place instead of raw coordinates', async ({ page }) => {
   await expect(page.getByText('용산역, 한강로동, 용산구', { exact: true })).toBeVisible()
   await expect(page.getByText(/검색한 위치를 출발점으로 사용해요/)).toBeVisible()
 })
+
+test('cancels a newly created journey when its initial location cannot be saved', async ({ context, page }) => {
+  await context.grantPermissions(['geolocation'])
+  await context.setGeolocation({ latitude: 37.1, longitude: 127.1, accuracy: 12 })
+  let cancelledJourneyId: string | null = null
+
+  await page.route('**/api/v1/**', async (route) => {
+    const request = route.request()
+    const url = new URL(request.url())
+    if (url.pathname === '/api/v1/system/health') {
+      await route.fulfill({ json: success({ status: 'UP', checkedAt: new Date().toISOString() }) })
+      return
+    }
+    if (url.pathname === '/api/v1/lines') {
+      await route.fulfill({ json: success([{ id: 'line-1', providerLineId: 'route-1', publicName: '1', operatorName: '테스트', routeType: 'CITY_BUS' }]) })
+      return
+    }
+    if (url.pathname === '/api/v1/lines/line-1/stops') {
+      await route.fulfill({ json: success([{ directionId: 'direction-1', directionName: '종점 방면', stopId: 'stop-1', stopName: '승차 정류장', stopSequence: 1, latitude: 37.1, longitude: 127.1, nextStopId: null, displayDirection: '종점 방면' }]) })
+      return
+    }
+    if (url.pathname === '/api/v1/journeys' && request.method() === 'POST') {
+      await route.fulfill({ json: success({ journeyId: 'journey-orphan', status: 'ACTIVE' }) })
+      return
+    }
+    if (url.pathname === '/api/v1/journeys/journey-orphan/locations') {
+      await route.fulfill({ status: 503, json: { success: false, code: 'EXTERNAL_STORAGE_ERROR', message: 'location unavailable', data: null } })
+      return
+    }
+    if (url.pathname === '/api/v1/journeys/journey-orphan' && request.method() === 'DELETE') {
+      cancelledJourneyId = 'journey-orphan'
+      await route.fulfill({ json: success({ journeyId: 'journey-orphan', status: 'CANCELLED' }) })
+      return
+    }
+    await route.fulfill({ json: success([]) })
+  })
+
+  await page.goto('/')
+  await page.getByRole('button', { name: '내 위치 확인' }).click()
+  await page.getByLabel('경기버스 번호').fill('1')
+  await page.getByRole('button', { name: /노선 찾기/ }).click()
+  await page.getByRole('button', { name: /1 테스트/ }).click()
+  await page.getByRole('button', { name: /승차 정류장/ }).click()
+  await page.getByRole('button', { name: '탑승 가능성 계산' }).click()
+
+  await expect(page.getByText('location unavailable')).toBeVisible()
+  await expect.poll(() => cancelledJourneyId).toBe('journey-orphan')
+})

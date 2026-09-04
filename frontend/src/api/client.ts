@@ -24,7 +24,25 @@ export async function requestApi<T>(path: string, init: RequestInit = {}): Promi
   }
 
   const response = await fetch(path, { ...init, headers })
-  const body = (await response.json()) as ApiResponse<T>
+  const responseText = await response.text()
+  let body: ApiResponse<T> | null = null
+  try {
+    body = responseText ? JSON.parse(responseText) as ApiResponse<T> : null
+  } catch {
+    throw new ApiError(
+      'INVALID_API_RESPONSE',
+      `서버가 올바르지 않은 응답을 반환했습니다. (${response.status})`,
+      response.status,
+    )
+  }
+
+  if (!body) {
+    throw new ApiError(
+      'EMPTY_API_RESPONSE',
+      `서버 응답이 비어 있습니다. (${response.status})`,
+      response.status,
+    )
+  }
 
   if (!response.ok || !body.success) {
     throw new ApiError(

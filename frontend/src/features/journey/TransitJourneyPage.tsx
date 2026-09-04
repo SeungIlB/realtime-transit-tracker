@@ -529,6 +529,7 @@ export function TransitJourneyPage() {
     endActiveJourney()
     setJourneyState('starting')
     setJourneyError(null)
+    let createdJourneyId: string | null = null
     try {
       const journey = await createJourney({
         anonymousKey: getAnonymousKey(),
@@ -539,12 +540,20 @@ export function TransitJourneyPage() {
         targetProbability: null,
         desiredArrivalAt: null,
       })
+      createdJourneyId = journey.journeyId
       await addJourneyLocation(journey.journeyId, location)
       lastUploadedLocation.current = location.observedAt
       setJourneyId(journey.journeyId)
       setJourneyState('tracking')
       document.getElementById('decision-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     } catch (error) {
+      if (createdJourneyId) {
+        try {
+          await cancelJourney(createdJourneyId)
+        } catch {
+          // The backend expires abandoned anonymous journeys automatically.
+        }
+      }
       setJourneyState('error')
       setJourneyError(journeyErrorMessage(error))
     }
