@@ -11,7 +11,6 @@ import java.util.UUID;
 
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import com.realtimetransit.backend.common.error.BusinessException;
 import com.realtimetransit.backend.common.error.ErrorCode;
@@ -54,7 +53,6 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
 @Service
-@Transactional(readOnly = true)
 @RequiredArgsConstructor
 @EnableConfigurationProperties({JourneyProperties.class, TransitArrivalProperties.class})
 public class BoardingDecisionServiceImpl implements BoardingDecisionService {
@@ -81,7 +79,6 @@ public class BoardingDecisionServiceImpl implements BoardingDecisionService {
 	private final TransitArrivalProperties arrivalProperties;
 
 	@Override
-	@Transactional
 	public BoardingDecisionResponse calculateDecision(UUID journeyId) {
 		Instant calculatedAt = clock.instant();
 		JourneySessionEntity journey = journeySessionValidator.findActiveJourney(journeyId, calculatedAt);

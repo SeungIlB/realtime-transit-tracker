@@ -7,7 +7,6 @@ import java.util.UUID;
 
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import com.realtimetransit.backend.common.error.BusinessException;
 import com.realtimetransit.backend.common.error.ErrorCode;
@@ -21,7 +20,6 @@ import com.realtimetransit.backend.transit.service.ArrivalService;
 import lombok.RequiredArgsConstructor;
 
 @Service
-@Transactional(readOnly = true)
 @RequiredArgsConstructor
 @EnableConfigurationProperties(TransitArrivalProperties.class)
 public class ArrivalServiceImpl implements ArrivalService {
@@ -34,7 +32,6 @@ public class ArrivalServiceImpl implements ArrivalService {
 	private final TransitArrivalProperties arrivalProperties;
 
 	@Override
-	@Transactional
 	public List<UpcomingArrivalResponse> findUpcomingArrivals(
 			UUID lineId,
 			UUID directionId,

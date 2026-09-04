@@ -3,7 +3,6 @@ package com.realtimetransit.backend.transit.service.impl;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import com.realtimetransit.backend.provider.repository.TransitProviderMapper;
 import com.realtimetransit.backend.provider.service.TransitExternalCollectionService;
@@ -16,7 +15,6 @@ import com.realtimetransit.backend.transit.service.TransitLineService;
 import lombok.RequiredArgsConstructor;
 
 @Service
-@Transactional(readOnly = true)
 @RequiredArgsConstructor
 public class TransitLineServiceImpl implements TransitLineService {
 
@@ -27,7 +25,6 @@ public class TransitLineServiceImpl implements TransitLineService {
 	private final TransitExternalCollectionService externalCollectionService;
 
 	@Override
-	@Transactional
 	public List<TransitLineResponse> searchActiveLines(String providerCode, String query, int limit) {
 		validateSearchInput(providerCode, query);
 		String normalizedQuery = query.strip();

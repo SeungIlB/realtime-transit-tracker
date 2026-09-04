@@ -4,7 +4,6 @@ import java.util.List;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import com.realtimetransit.backend.common.error.BusinessException;
 import com.realtimetransit.backend.common.error.ErrorCode;
@@ -18,7 +17,6 @@ import com.realtimetransit.backend.transit.service.TransitStopService;
 import lombok.RequiredArgsConstructor;
 
 @Service
-@Transactional(readOnly = true)
 @RequiredArgsConstructor
 public class TransitStopServiceImpl implements TransitStopService {
 
@@ -26,7 +24,6 @@ public class TransitStopServiceImpl implements TransitStopService {
 	private final TransitExternalCollectionService externalCollectionService;
 
 	@Override
-	@Transactional
 	public List<DirectedStopResponse> findActiveStopsByLineId(UUID lineId) {
 		validateRequiredId(lineId, "lineId");
 		var stops = transitStopMapper.findActiveStopsByLineId(lineId);
@@ -40,7 +37,6 @@ public class TransitStopServiceImpl implements TransitStopService {
 	}
 
 	@Override
-	@Transactional
 	public List<DestinationStopResponse> findDestinationsAfterBoardingStop(
 			UUID lineId,
 			UUID directionId,
