@@ -3,9 +3,11 @@ package com.realtimetransit.backend.provider.service.impl;
 import java.time.Clock;
 import java.time.Instant;
 
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.realtimetransit.backend.common.maintenance.TransitMaintenanceProperties;
 import com.realtimetransit.backend.provider.dto.request.RawObservationSaveRequest;
 import com.realtimetransit.backend.provider.dto.request.VehicleRunObservationSaveRequest;
 import com.realtimetransit.backend.provider.dto.request.ArrivalPredictionObservationSaveRequest;
@@ -23,6 +25,7 @@ import lombok.RequiredArgsConstructor;
 @Service
 @Transactional
 @RequiredArgsConstructor
+@EnableConfigurationProperties(TransitMaintenanceProperties.class)
 public class ObservationServiceImpl implements ObservationService {
 
 	private final RawObservationMapper rawObservationMapper;
@@ -30,6 +33,7 @@ public class ObservationServiceImpl implements ObservationService {
 	private final ArrivalPredictionObservationMapper arrivalPredictionObservationMapper;
 	private final Clock clock;
 	private final ObservationValidator observationValidator;
+	private final TransitMaintenanceProperties maintenanceProperties;
 
 	@Override
 	public long saveRawObservation(RawObservationSaveRequest request) {
@@ -117,6 +121,11 @@ public class ObservationServiceImpl implements ObservationService {
 	private RawObservationEntity createRawObservationEntity(
 			RawObservationSaveRequest request,
 			Instant receivedAt) {
+		Instant retentionExpiresAt = receivedAt.plus(maintenanceProperties.getObservationRetention());
+		Instant requestedExpiresAt = request.getExpiresAt();
+		Instant expiresAt = requestedExpiresAt == null || requestedExpiresAt.isAfter(retentionExpiresAt)
+				? retentionExpiresAt
+				: requestedExpiresAt;
 
         RawObservationEntity entity = RawObservationEntity.builder()
                 .id(null)
@@ -127,7 +136,7 @@ public class ObservationServiceImpl implements ObservationService {
                 .providerObservedAt(request.getProviderObservedAt())
                 .responseStatus(request.getResponseStatus())
                 .payload(request.getPayload())
-                .expiresAt(request.getExpiresAt())
+                .expiresAt(expiresAt)
                 .build();
         return entity;
     }

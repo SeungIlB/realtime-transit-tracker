@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.UUID;
@@ -17,6 +18,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.realtimetransit.backend.common.maintenance.TransitMaintenanceProperties;
 import com.realtimetransit.backend.provider.dto.request.ArrivalPredictionObservationSaveRequest;
 import com.realtimetransit.backend.provider.dto.request.RawObservationSaveRequest;
 import com.realtimetransit.backend.provider.dto.request.VehicleRunObservationSaveRequest;
@@ -46,12 +48,15 @@ class ObservationServiceImplTest {
 
 	@BeforeEach
 	void setUp() {
+		TransitMaintenanceProperties maintenanceProperties = new TransitMaintenanceProperties();
+		maintenanceProperties.setObservationRetention(Duration.ofHours(2));
 		observationService = new ObservationServiceImpl(
 				rawObservationMapper,
 				vehicleRunObservationMapper,
 				arrivalPredictionObservationMapper,
 				Clock.fixed(RECEIVED_AT, ZoneOffset.UTC),
-				observationValidator);
+				observationValidator,
+				maintenanceProperties);
 	}
 
 	@Test
@@ -66,6 +71,21 @@ class ObservationServiceImplTest {
 		var captor = ArgumentCaptor.forClass(RawObservationEntity.class);
 		verify(rawObservationMapper).insertRawObservation(captor.capture());
 		assertThat(captor.getValue().getReceivedAt()).isEqualTo(RECEIVED_AT);
+		assertThat(captor.getValue().getExpiresAt()).isEqualTo(RECEIVED_AT.plus(Duration.ofHours(2)));
+	}
+
+	@Test
+	void limitsRawObservationRetentionToTwoHours() {
+		var request = RawObservationSaveRequest.builder()
+				.providerId(1L).endpoint("vehicles").requestKey("line-1")
+				.responseStatus(200).expiresAt(RECEIVED_AT.plus(Duration.ofDays(1))).build();
+		when(rawObservationMapper.insertRawObservation(any())).thenReturn(11L);
+
+		observationService.saveRawObservation(request);
+
+		var captor = ArgumentCaptor.forClass(RawObservationEntity.class);
+		verify(rawObservationMapper).insertRawObservation(captor.capture());
+		assertThat(captor.getValue().getExpiresAt()).isEqualTo(RECEIVED_AT.plus(Duration.ofHours(2)));
 	}
 
 	@Test

@@ -78,7 +78,7 @@ transit:
     observation-freshness: 2m
   maintenance:
     interval: 10m
-    observation-retention: 24h
+    observation-retention: 2h
     batch-size: 1000
   api-quota:
     seoul-subway-daily-limit: ${SEOUL_SUBWAY_DAILY_CALL_BUDGET:800}

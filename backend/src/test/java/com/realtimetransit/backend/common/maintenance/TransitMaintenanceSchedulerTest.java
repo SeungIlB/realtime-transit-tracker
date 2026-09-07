@@ -31,7 +31,7 @@ class TransitMaintenanceSchedulerTest {
 	@Test
 	void deletesDependentObservationsBeforeTheirParentsAndExpiresJourneyData() {
 		TransitMaintenanceProperties properties = new TransitMaintenanceProperties();
-		properties.setObservationRetention(Duration.ofHours(24));
+		properties.setObservationRetention(Duration.ofHours(2));
 		properties.setBatchSize(1_000);
 		TransitMaintenanceScheduler scheduler = new TransitMaintenanceScheduler(
 				observationRetentionService,
@@ -44,9 +44,9 @@ class TransitMaintenanceSchedulerTest {
 
 		var ordered = inOrder(observationRetentionService, journeyLocationMapper, journeyMapper);
 		ordered.verify(observationRetentionService)
-				.deleteOldArrivalPredictions(Duration.ofHours(24), 1_000);
+				.deleteOldArrivalPredictions(Duration.ofHours(2), 1_000);
 		ordered.verify(observationRetentionService)
-				.deleteOldVehicleRunObservations(Duration.ofHours(24), 1_000);
+				.deleteOldVehicleRunObservations(Duration.ofHours(2), 1_000);
 		ordered.verify(observationRetentionService).deleteExpiredRawObservations(1_000);
 		ordered.verify(journeyLocationMapper).deleteExpiredLocations(NOW, 1_000);
 		ordered.verify(journeyMapper).expireJourneySessionsBefore(NOW, NOW, 1_000);
