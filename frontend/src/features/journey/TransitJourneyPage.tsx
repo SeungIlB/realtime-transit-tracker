@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties, FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Button, TextField } from '@toss/tds-mobile'
+import { Button, TextField } from '../../components/ui'
 import { ApiError } from '../../api/client'
 import { searchPlaces, type PlaceSearchResult } from '../../api/geocoding'
 import {
