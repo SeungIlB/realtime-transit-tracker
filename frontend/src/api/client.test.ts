@@ -1,6 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { requestApi } from './client'
+import { requestApi, resolveApiUrl } from './client'
+
+describe('resolveApiUrl', () => {
+  it('uses the relative path during local development', () => {
+    expect(resolveApiUrl('/api/test', '')).toBe('/api/test')
+  })
+
+  it('joins the deployed backend origin and API path without duplicate slashes', () => {
+    expect(resolveApiUrl('/api/test', 'https://backend.example.com/'))
+      .toBe('https://backend.example.com/api/test')
+  })
+})
 
 describe('requestApi', () => {
   afterEach(() => {

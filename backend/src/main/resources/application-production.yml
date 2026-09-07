@@ -1,0 +1,19 @@
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 3
+      minimum-idle: 0
+      connection-timeout: 10000
+      idle-timeout: 30000
+
+server:
+  tomcat:
+    threads:
+      max: 20
+      min-spare: 2
+
+logging:
+  level:
+    com.realtimetransit.backend.transit.repository: INFO
+    com.realtimetransit.backend.provider.repository: INFO
+    com.realtimetransit.backend.arrival.repository: INFO

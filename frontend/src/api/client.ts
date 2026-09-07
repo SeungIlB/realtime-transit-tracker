@@ -17,13 +17,23 @@ export class ApiError extends Error {
   }
 }
 
+export function resolveApiUrl(path: string, baseUrl = import.meta.env.VITE_API_BASE_URL): string {
+  if (!baseUrl) {
+    return path
+  }
+
+  const normalizedBaseUrl = baseUrl.replace(/\/+$/, '')
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+  return `${normalizedBaseUrl}${normalizedPath}`
+}
+
 export async function requestApi<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers)
   if (init.body && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json')
   }
 
-  const response = await fetch(path, { ...init, headers })
+  const response = await fetch(resolveApiUrl(path), { ...init, headers })
   const responseText = await response.text()
   let body: ApiResponse<T> | null = null
   try {

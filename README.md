@@ -72,6 +72,40 @@ npm run dev
 
 프런트엔드는 `http://localhost:5173`에서 실행되며 `/api` 요청을 로컬 Spring Boot 서버로 프록시합니다.
 
+## 무료 배포
+
+배포 구성은 Vercel(프런트엔드), Render(백엔드와 Redis), Neon(PostgreSQL)입니다. Render Redis는 캐시와 외부 API 호출량 제한 전용이며 무료 인스턴스 재시작 시 데이터가 사라져도 영구 데이터에는 영향이 없습니다.
+
+### 1. Neon PostgreSQL
+
+Neon에서 프로젝트를 만든 뒤 `Connect` 화면의 접속 정보를 준비합니다. Render에 입력할 값은 다음과 같습니다.
+
+- `DB_URL`: `jdbc:postgresql://<host>/<database>?sslmode=require` 형식의 JDBC URL
+- `DB_USERNAME`: Neon role 이름
+- `DB_PASSWORD`: Neon role 비밀번호
+
+Flyway가 백엔드 최초 기동 시 스키마를 자동 생성합니다.
+
+### 2. Render 백엔드와 Redis
+
+저장소를 GitHub에 올리고 Render에서 `New > Blueprint`를 선택해 루트의 `render.yaml`을 적용합니다. 최초 생성 화면에서 다음 비밀 환경변수를 입력합니다.
+
+- `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`
+- `CORS_ALLOWED_ORIGINS`: 최초에는 예정된 Vercel 주소, 배포 후에는 실제 주소(예: `https://example.vercel.app`)
+- `GBIS_SERVICE_KEY`
+- `NATIONAL_PRECISION_BUS_SERVICE_KEY`
+- `SEOUL_SUBWAY_SERVICE_KEY`
+- `SEOUL_SUBWAY_REFERENCE_SERVICE_KEY`
+- `KRIC_SERVICE_KEY`
+
+`SPRING_DATA_REDIS_URL`은 Blueprint가 Render Key Value의 내부 접속 주소로 자동 연결합니다. 백엔드 상태는 배포 주소의 `/actuator/health`에서 확인합니다.
+
+### 3. Vercel 프런트엔드
+
+Vercel에서 같은 GitHub 저장소를 가져오고 Root Directory를 `frontend`로 지정합니다. 환경변수 `VITE_API_BASE_URL`에는 Render 백엔드 주소를 경로 없이 입력합니다(예: `https://realtime-transit-backend.onrender.com`). 배포 후 실제 Vercel 주소가 달라졌다면 Render의 `CORS_ALLOWED_ORIGINS`도 같은 주소로 수정하고 백엔드를 재배포합니다.
+
+무료 Render 웹 서비스는 사용하지 않을 때 정지하므로 첫 요청은 시간이 걸릴 수 있습니다. CORS에는 쉼표로 구분한 정확한 프런트엔드 주소만 등록하고 API 키나 DB 비밀번호는 저장소 파일에 기록하지 않습니다.
+
 ## 검증 명령
 
 ```powershell

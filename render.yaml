@@ -1,0 +1,45 @@
+services:
+  - type: web
+    name: realtime-transit-backend
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: production
+      - key: JAVA_OPTS
+        value: -Xms128m -Xmx320m -XX:+UseSerialGC -Xss256k
+      - key: DB_URL
+        sync: false
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: SPRING_DATA_REDIS_URL
+        fromService:
+          name: realtime-transit-redis
+          type: keyvalue
+          property: connectionString
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      - key: GBIS_SERVICE_KEY
+        sync: false
+      - key: NATIONAL_PRECISION_BUS_SERVICE_KEY
+        sync: false
+      - key: SEOUL_SUBWAY_SERVICE_KEY
+        sync: false
+      - key: SEOUL_SUBWAY_REFERENCE_SERVICE_KEY
+        sync: false
+      - key: KRIC_SERVICE_KEY
+        sync: false
+
+  - type: keyvalue
+    name: realtime-transit-redis
+    plan: free
+    region: singapore
+    ipAllowList: []
+    maxmemoryPolicy: volatile-ttl
+    persistenceMode: off
