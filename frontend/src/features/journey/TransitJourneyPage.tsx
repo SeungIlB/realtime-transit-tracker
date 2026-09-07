@@ -318,7 +318,9 @@ function DecisionPanel({ decision, routeStops, access, boardingStopName, locatio
     ?? selectedVehicle?.pacePredictions.at(-1)?.boardingProbability
     ?? decision.vehicles[0]?.pacePredictions.at(-1)?.boardingProbability
   const selectedIndex = selectedVehicle ? decision.vehicles.indexOf(selectedVehicle) : -1
-  const title = selectedIndex === 1 && decision.decision !== 'UNLIKELY' ? `다음 차를 추천해요 · ${copy.title}` : copy.title
+  const title = selectedIndex === 1 && decision.decision !== 'UNLIKELY'
+    ? <>다음 차를 추천해요.<br />{copy.title}</>
+    : copy.title
 
   return (
     <div className="decision-content" aria-live="polite">
