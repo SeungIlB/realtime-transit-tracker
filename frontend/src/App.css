@@ -100,7 +100,7 @@
 .decision-hero dl { display: grid; grid-template-columns: repeat(3, 1fr); margin: 0; padding: 20px 0; border-top: 1px solid rgb(255 255 255 / 14%); border-bottom: 1px solid rgb(255 255 255 / 14%); }
 .decision-hero dl div { padding: 0 12px; }
 .decision-hero dt { color: #8b95a1; font-size: 12px; }
-.decision-hero dd { margin: 7px 0 0; font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.decision-hero dd { margin: 7px 0 0; font-size: 15px; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .decision-hero small { display: block; margin-top: 5px; color: #8b95a1; font-size: 10px; }
 .timing-comparison { display: grid; gap: 14px; margin: 28px 0; padding: 20px; border-radius: 18px; background: rgb(255 255 255 / 6%); }
 .timing-row { display: grid; grid-template-columns: 70px 1fr 48px; gap: 14px; align-items: center; color: #b0b8c1; font-size: 12px; }

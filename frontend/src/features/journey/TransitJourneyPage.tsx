@@ -76,10 +76,10 @@ const paceLabels: Record<string, string> = {
 }
 
 const confidenceLabels: Record<string, string> = {
-  HIGH: '신뢰도 높음',
-  MEDIUM: '신뢰도 보통',
-  LOW: '신뢰도 낮음',
-  UNKNOWN: '신뢰도 확인 중',
+  HIGH: '높음',
+  MEDIUM: '보통',
+  LOW: '낮음',
+  UNKNOWN: '확인 중',
 }
 
 function formatTime(value: string) {
