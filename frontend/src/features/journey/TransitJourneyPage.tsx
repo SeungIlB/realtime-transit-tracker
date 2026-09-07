@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties, FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Button, TextField } from '@toss/tds-mobile'
 import { ApiError } from '../../api/client'
 import { searchPlaces, type PlaceSearchResult } from '../../api/geocoding'
 import {
@@ -187,10 +188,10 @@ function getAnonymousKey() {
 
 function QueryState({ message, action, onAction }: { message: string; action?: string; onAction?: () => void }) {
   return (
-    <div className="query-state" role="status">
-      <span className="query-state-mark" aria-hidden="true" />
+    <div className="feedback" role="status">
+      <span className="feedback-dot" aria-hidden="true" />
       <p>{message}</p>
-      {action && onAction ? <button className="text-button" type="button" onClick={onAction}>{action}</button> : null}
+      {action && onAction ? <Button type="button" size="small" variant="weak" onClick={onAction}>{action}</Button> : null}
     </div>
   )
 }
@@ -243,13 +244,13 @@ function VehicleCard({ vehicle, index, selected, routeStops }: { vehicle: Vehicl
           <span className="vehicle-order">{index === 0 ? '첫 번째 차량' : '다음 차량'}</span>
           <strong>{minutesUntil(vehicle.vehicleExpectedAt)}분 뒤</strong>
         </div>
-        {selected ? <span className="recommendation-mark">추천</span> : null}
+        {selected ? <span className="recommendation-mark">추천 차량</span> : null}
       </header>
       <p className="vehicle-caption">
         {formatTime(vehicle.vehicleExpectedAt)} 도착 예상 · {vehicle.providerVehicleId}
         {serviceLabel ? <span className="service-type-badge" data-service={vehicle.serviceType}>{serviceLabel}</span> : null}
       </p>
-      <div className="vehicle-position"><span>현재 위치</span><strong>{position.label}</strong><p>{position.detail}</p></div>
+      <div className="vehicle-position"><span aria-hidden="true" /><div><small>현재 위치</small><strong>{position.label}</strong><p>{position.detail}</p></div></div>
       <ul className="pace-list" aria-label={`${index + 1}번째 차량 이동 방법별 탑승 확률`}>
         {vehicle.pacePredictions.map((prediction) => (
           <li key={prediction.paceType} data-recommended={prediction.recommended}>
@@ -341,7 +342,7 @@ function DecisionPanel({ decision, routeStops, access, boardingStopName, locatio
           {decision.vehicles.map((vehicle, index) => <VehicleCard key={vehicle.arrivalPredictionId} vehicle={vehicle} index={index} selected={vehicle.providerVehicleId === decision.recommendedVehicleId} routeStops={routeStops} />)}
         </div>
       ) : null}
-      <div className="decision-footer"><span>{formatTime(decision.calculatedAt)} 계산 · 1분마다 갱신</span><button className="text-button inverse" type="button" onClick={onStop}>모니터링 종료</button></div>
+      <div className="decision-footer"><span>{formatTime(decision.calculatedAt)} 계산 · 1분마다 자동 갱신</span><Button type="button" color="light" variant="weak" size="small" onClick={onStop}>모니터링 종료</Button></div>
     </div>
   )
 }
@@ -559,99 +560,99 @@ export function TransitJourneyPage() {
     }
   }
 
+  const locationTitle = location
+    ? nearestStop ? `${nearestStop.stopName} 인근` : locationLabel ?? '현재 위치'
+    : locationStatus === 'loading' ? '현재 위치를 찾고 있어요' : '출발 위치를 알려주세요'
+  const locationDetail = location
+    ? nearestStop
+      ? `${nearestStop.stopName}까지 ${formatDistance(distanceMeters(location, nearestStop))} · ${location.source === 'search' ? '검색 위치 기준' : `정확도 약 ${Math.round(location.accuracyM)}m`}`
+      : location.source === 'search' ? '검색한 장소를 출발점으로 사용해요.' : `위치 정확도 약 ${Math.round(location.accuracyM)}m`
+    : '현재 위치를 쓰거나 장소를 직접 검색할 수 있어요.'
+
   return (
-    <div className="site-shell">
+    <div className="app-shell">
       <a className="skip-link" href="#journey-content">여정 설정으로 건너뛰기</a>
-      <header className="site-header">
-        <a className="wordmark" href="/" aria-label="첫차 홈">첫차<span className="wordmark-dot" aria-hidden="true" /></a>
-        <p>실시간 탑승 가능성</p>
-        <span className="live-indicator" data-status={healthStatus} aria-label={healthStatus === 'live' ? '서버 연결 정상' : healthStatus === 'checking' ? '서버 연결 확인 중' : '서버 연결 끊김'} role="status"><i aria-hidden="true" />{healthStatus === 'live' ? 'LIVE' : healthStatus === 'checking' ? '연결 중' : 'OFFLINE'}</span>
+      <header className="app-bar">
+        <a className="brand" href="/" aria-label="첫차 홈">첫차</a>
+        <span className="connection" data-status={healthStatus} role="status"><i aria-hidden="true" />{healthStatus === 'live' ? '실시간 연결' : healthStatus === 'checking' ? '연결 확인 중' : '연결 끊김'}</span>
       </header>
 
-      <main id="journey-content">
-        <section className="intro" aria-labelledby="page-title">
-          <p className="section-code">GO? / Realtime boarding decision</p>
-          <h1 id="page-title">지금 나가면 탈 수 있을까?</h1>
-          <p className="intro-copy">내 위치와 차량 도착 시간을 함께 계산해, 목표 차량과 필요한 이동 속도를 알려드려요.</p>
+      <main id="journey-content" className="journey-layout">
+        <section className="hero" aria-labelledby="page-title">
+          <span className="hero-label">실시간 탑승 판단</span>
+          <h1 id="page-title">지금 나가면<br />탈 수 있을까요?</h1>
+          <p>내 위치와 차량을 함께 계산해서, 어떤 차를 타려면 얼마나 빠르게 움직여야 하는지 알려드려요.</p>
         </section>
 
-        <nav className="journey-progress" aria-label="탑승 판단 단계">
-          <div className="progress-line" aria-hidden="true"><span style={{ width: `${(currentStep / 4) * 100}%` }} /></div>
+        <nav className="step-rail" aria-label="탑승 판단 단계">
+          <div className="step-track" aria-hidden="true"><span style={{ width: `${(currentStep - 1) / 3 * 100}%` }} /></div>
           <ol>{steps.map((step, index) => {
             const number = index + 1
             const state = number < currentStep ? 'complete' : number === currentStep ? 'current' : 'pending'
-            return <li key={step} data-state={state} aria-current={state === 'current' ? 'step' : undefined}><span>0{number}</span>{step}</li>
+            return <li key={step} data-state={state} aria-current={state === 'current' ? 'step' : undefined}><b>{number < currentStep ? '✓' : number}</b><span>{step}</span></li>
           })}</ol>
         </nav>
 
-        <section className="location-panel" aria-labelledby="location-heading">
-          <div className="panel-heading"><span>01</span><div><h2 id="location-heading">출발 위치부터 확인할게요</h2><p>좌표는 탑승 가능성을 계산하는 동안에만 사용합니다.</p></div></div>
-          <div className="location-actions">
-            <div className="location-status" data-state={locationStatus}><span aria-hidden="true" /><div><strong>{location ? nearestStop ? `${nearestStop.stopName} 인근` : locationLabel ?? '현재 위치를 사용하고 있어요' : locationStatus === 'loading' ? '현재 위치 확인 중' : '아직 위치를 확인하지 않았어요'}</strong><p>{location ? nearestStop ? `${nearestStop.stopName}까지 ${formatDistance(distanceMeters(location, nearestStop))} · ${location.source === 'search' ? '검색한 위치 기준' : `위치 정확도 약 ${Math.round(location.accuracyM)}m`}` : location.source === 'search' ? '검색한 위치를 출발점으로 사용해요. 노선을 선택하면 가까운 역·정류장으로 표시해요.' : `위치 정확도 약 ${Math.round(location.accuracyM)}m · 노선을 선택하면 가까운 역·정류장으로 표시해요.` : '정확할수록 추천의 신뢰도가 높아집니다.'}</p></div></div>
-            <button className="primary-button" type="button" onClick={requestLocation} disabled={locationStatus === 'loading'}>{location ? '위치 다시 확인' : locationStatus === 'loading' ? '확인 중…' : '내 위치 확인'}</button>
-            <button className="secondary-button" type="button" aria-expanded={placeSearchOpen} aria-controls="place-search" onClick={() => setPlaceSearchOpen((open) => !open)}>장소 검색</button>
+        <section className="flow-card location-card" aria-labelledby="location-heading">
+          <header className="section-header"><span>1</span><div><h2 id="location-heading">어디서 출발하나요?</h2><p>선택한 위치는 탑승 가능성 계산에만 사용해요.</p></div></header>
+          <div className="location-summary" data-ready={Boolean(location)}><div className="location-pin" aria-hidden="true"><i /></div><div><strong>{locationTitle}</strong><p>{locationDetail}</p></div></div>
+          <div className="button-row">
+            <Button type="button" display="block" size="large" loading={locationStatus === 'loading'} onClick={requestLocation}>{location ? '현재 위치로 다시 설정' : '내 위치 사용하기'}</Button>
+            <Button type="button" display="block" size="large" variant="weak" aria-expanded={placeSearchOpen} aria-controls="place-search" onClick={() => setPlaceSearchOpen((open) => !open)}>장소 검색</Button>
           </div>
           {locationError ? <p className="inline-error" role="alert">{locationError}</p> : null}
-          {placeSearchOpen ? (
-            <div id="place-search" className="place-search-panel">
-              <form className="place-search-form" onSubmit={submitPlaceSearch} role="search">
-                <label htmlFor="place-query">주소 또는 장소명</label>
-                <div><input id="place-query" name="placeQuery" type="search" value={placeQuery} onChange={(event) => setPlaceQuery(event.target.value)} placeholder="예: 용산역, 서울시청" autoComplete="street-address" /><button className="secondary-button" type="submit" disabled={placeQueryResult.isFetching}>{placeQueryResult.isFetching ? '찾는 중…' : '위치 찾기'}</button></div>
-              </form>
-              {placeQueryResult.isError ? <p className="place-search-message" role="alert">장소를 찾지 못했어요. 잠시 후 다시 검색해 주세요.</p> : null}
-              {placeQueryResult.isSuccess && placeQueryResult.data.length === 0 ? <p className="place-search-message" role="status">일치하는 장소가 없어요. 지역명을 함께 입력해 보세요.</p> : null}
-              {placeQueryResult.data?.length ? <ul className="place-results" aria-label="검색된 장소">{placeQueryResult.data.map((result) => <li key={result.id}><button type="button" onClick={() => selectPlace(result)}><strong>{shortPlaceName(result.displayName)}</strong><span>{result.displayName}</span></button></li>)}</ul> : null}
-              <p className="geocoding-attribution">장소 검색 © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap 기여자</a></p>
-            </div>
-          ) : null}
+          {placeSearchOpen ? <div id="place-search" className="reveal-panel">
+            <form className="search-form" onSubmit={submitPlaceSearch} role="search">
+              <TextField variant="box" label="주소 또는 장소명" labelOption="sustain" id="place-query" name="placeQuery" type="search" value={placeQuery} onChange={(event) => setPlaceQuery(event.target.value)} placeholder="예: 용산역, 서울시청" autoComplete="street-address" />
+              <Button type="submit" display="full" size="large" loading={placeQueryResult.isFetching}>위치 찾기</Button>
+            </form>
+            {placeQueryResult.isError ? <QueryState message="장소를 찾지 못했어요. 잠시 후 다시 검색해 주세요." /> : null}
+            {placeQueryResult.isSuccess && placeQueryResult.data.length === 0 ? <QueryState message="일치하는 장소가 없어요. 지역명을 함께 입력해 보세요." /> : null}
+            {placeQueryResult.data?.length ? <ul className="selection-list" aria-label="검색된 장소">{placeQueryResult.data.map((result) => <li key={result.id}><button type="button" onClick={() => selectPlace(result)}><span className="list-copy"><strong>{shortPlaceName(result.displayName)}</strong><small>{result.displayName}</small></span><span className="chevron" aria-hidden="true">›</span></button></li>)}</ul> : null}
+            <p className="attribution">장소 검색 © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap 기여자</a></p>
+          </div> : null}
         </section>
 
-        <section className="line-panel" aria-labelledby="line-heading">
-          <div className="panel-heading"><span>02</span><div><h2 id="line-heading">탈 노선을 찾아보세요</h2><p>위치를 먼저 확인하면 가까운 승차 정류장이 위에 표시됩니다.</p></div></div>
-          <fieldset className="provider-switcher"><legend>교통수단 선택</legend><div>{providerOptions.map((option) => <label key={option.value} data-selected={provider === option.value}><input type="radio" name="transitProvider" value={option.value} checked={provider === option.value} onChange={() => changeProvider(option.value)} /><strong>{option.label}</strong><span>{option.description}</span></label>)}</div></fieldset>
-          <form className="line-search" onSubmit={submitSearch} role="search"><label htmlFor="line-query">{providerOption.searchLabel}</label><div><input id="line-query" name="lineQuery" value={queryInput} onChange={(event) => setQueryInput(event.target.value)} placeholder={providerOption.placeholder} autoComplete="off" /><button type="submit">노선 찾기 <span aria-hidden="true">→</span></button></div></form>
+        <section className="flow-card line-card" aria-labelledby="line-heading">
+          <header className="section-header"><span>2</span><div><h2 id="line-heading">어떤 노선을 타나요?</h2><p>버스 번호나 지하철 호선으로 찾아보세요.</p></div></header>
+          <fieldset className="provider-tabs"><legend>교통수단 선택</legend>{providerOptions.map((option) => <label key={option.value} data-selected={provider === option.value}><input type="radio" name="transitProvider" value={option.value} checked={provider === option.value} onChange={() => changeProvider(option.value)} /><span>{option.label}</span></label>)}</fieldset>
+          <form className="search-form compact" onSubmit={submitSearch} role="search">
+            <TextField variant="box" label={providerOption.searchLabel} labelOption="sustain" id="line-query" name="lineQuery" value={queryInput} onChange={(event) => setQueryInput(event.target.value)} placeholder={providerOption.placeholder} autoComplete="off" />
+            <Button type="submit" display="full" size="large" loading={lineQuery.isFetching}>노선 찾기</Button>
+          </form>
           {lineQuery.isPending && submittedQuery ? <QueryState message="노선을 찾고 있어요." /> : null}
           {lineQuery.isError ? <QueryState message={lineErrorMessage(provider, lineQuery.error)} action="다시 시도" onAction={() => lineQuery.refetch()} /> : null}
           {lineQuery.data?.length === 0 ? <QueryState message="일치하는 노선이 없어요. 다른 번호로 검색해 보세요." /> : null}
-          {lineQuery.data?.length ? <ul className="option-list line-results" aria-label="검색된 노선">{lineQuery.data.map((line) => <li key={line.id}><button type="button" data-selected={selectedLine?.id === line.id} onClick={() => selectLine(line)}><strong>{line.publicName}</strong><span>{line.operatorName ?? line.routeType ?? '운영 정보 없음'}</span><i aria-hidden="true">→</i></button></li>)}</ul> : null}
+          {lineQuery.data?.length ? <ul className="selection-list line-list" aria-label="검색된 노선">{lineQuery.data.map((line) => <li key={line.id}><button type="button" data-selected={selectedLine?.id === line.id} onClick={() => selectLine(line)}><span className="route-symbol">{line.publicName.slice(0, 3)}</span><span className="list-copy"><strong>{line.publicName}</strong><small>{line.operatorName ?? line.routeType ?? '운영 정보 없음'}</small></span><span className="chevron" aria-hidden="true">›</span></button></li>)}</ul> : null}
         </section>
 
-        <div className="stop-grid">
-          <section className="selection-panel" aria-labelledby="boarding-heading" data-locked={!selectedLine}>
-            <div className="panel-heading"><span>03</span><div><h2 id="boarding-heading">어디서 탈까요?</h2><p>{boardingStopOrderCopy}</p></div></div>
-            {selectedLine && stopQuery.isPending ? <QueryState message="정류장을 불러오고 있어요." /> : null}
-            {stopQuery.isError ? <QueryState message="정류장을 불러오지 못했어요." action="다시 시도" onAction={() => stopQuery.refetch()} /> : null}
-            {stopQuery.data?.length ? <div className="stop-search"><div><label htmlFor="boarding-stop-query">승차 정류장 검색</label><span aria-live="polite">{sortedBoardingStops.length}곳</span></div><input id="boarding-stop-query" name="boardingStopQuery" type="search" value={boardingStopQuery} onChange={(event) => setBoardingStopQuery(event.target.value)} placeholder="정류장 이름, 방향 또는 순번" autoComplete="off" aria-controls="boarding-stop-list" /></div> : null}
-            {stopQuery.data?.length && sortedBoardingStops.length === 0 ? <QueryState message={`“${boardingStopQuery.trim()}”과 일치하는 정류장이 없어요.`} /> : null}
-            {sortedBoardingStops.length ? <ul id="boarding-stop-list" className="option-list stop-list" aria-label="승차 정류장">{sortedBoardingStops.map((stop, index) => {
-              const distance = location ? distanceMeters(location, stop) : Number.POSITIVE_INFINITY
-              return <li key={`${stop.directionId}-${stop.stopSequence}`}><button type="button" data-selected={boardingStop?.directionId === stop.directionId && boardingStop.stopSequence === stop.stopSequence} onClick={() => selectBoardingStop(stop)}><span className="sequence">{String(stop.stopSequence).padStart(2, '0')}</span><strong>{stop.stopName}</strong><span>{stop.displayDirection ?? stop.directionName}{Number.isFinite(distance) ? ` · ${formatDistance(distance)}` : ''}{index === 0 && location && Number.isFinite(distance) ? ' · 가장 가까움' : ''}</span></button></li>
-            })}</ul> : null}
-          </section>
+        <section className="flow-card stop-card" aria-labelledby="boarding-heading" data-locked={!selectedLine}>
+          <header className="section-header"><span>3</span><div><h2 id="boarding-heading">어디서 타나요?</h2><p>{boardingStopOrderCopy}</p></div></header>
+          {selectedLine && stopQuery.isPending ? <QueryState message="정류장을 불러오고 있어요." /> : null}
+          {stopQuery.isError ? <QueryState message="정류장을 불러오지 못했어요." action="다시 시도" onAction={() => stopQuery.refetch()} /> : null}
+          {stopQuery.data?.length ? <TextField variant="box" label="승차 정류장 검색" labelOption="sustain" id="boarding-stop-query" name="boardingStopQuery" type="search" value={boardingStopQuery} onChange={(event) => setBoardingStopQuery(event.target.value)} placeholder="정류장 이름, 방향 또는 순번" autoComplete="off" /> : null}
+          {stopQuery.data?.length && sortedBoardingStops.length === 0 ? <QueryState message={`“${boardingStopQuery.trim()}”과 일치하는 정류장이 없어요.`} /> : null}
+          {sortedBoardingStops.length ? <ul className="selection-list stop-list" aria-label="승차 정류장">{sortedBoardingStops.map((stop, index) => {
+            const distance = location ? distanceMeters(location, stop) : Number.POSITIVE_INFINITY
+            const selected = boardingStop?.directionId === stop.directionId && boardingStop.stopSequence === stop.stopSequence
+            return <li key={`${stop.directionId}-${stop.stopSequence}`}><button type="button" data-selected={selected} onClick={() => selectBoardingStop(stop)}><span className="stop-sequence">{String(stop.stopSequence).padStart(2, '0')}</span><span className="list-copy"><strong>{stop.stopName}</strong><small>{stop.displayDirection ?? stop.directionName}{Number.isFinite(distance) ? ` · ${formatDistance(distance)}` : ''}{index === 0 && location && Number.isFinite(distance) ? ' · 가장 가까움' : ''}</small></span><span className="select-mark" aria-hidden="true">{selected ? '✓' : '›'}</span></button></li>
+          })}</ul> : null}
+        </section>
 
-          <section className="selection-panel" aria-labelledby="alighting-heading" data-locked={!boardingStop}>
-            <div className="panel-heading"><span>선택</span><div><h2 id="alighting-heading">내릴 곳도 정할까요?</h2><p>{boardingStop ? '하차 정류장은 경로 확인용이며 생략할 수 있어요.' : '승차 정류장을 먼저 선택하세요.'}</p></div></div>
-            {boardingStop && destinationQuery.isPending ? <QueryState message="하차 가능한 정류장을 찾고 있어요." /> : null}
-            {destinationQuery.isError ? <QueryState message="하차 정류장을 불러오지 못했어요." action="다시 시도" onAction={() => destinationQuery.refetch()} /> : null}
-            {destinationQuery.data?.length ? <div className="stop-search"><div><label htmlFor="alighting-stop-query">하차 정류장 검색</label><span aria-live="polite">{filteredAlightingStops.length}곳</span></div><input id="alighting-stop-query" name="alightingStopQuery" type="search" value={alightingStopQuery} onChange={(event) => setAlightingStopQuery(event.target.value)} placeholder="정류장 이름 또는 순번" autoComplete="off" aria-controls="alighting-stop-list" /></div> : null}
-            {filteredAlightingStops.length ? <ul id="alighting-stop-list" className="option-list stop-list" aria-label="하차 정류장">{filteredAlightingStops.map((stop) => <li key={`${stop.directionId}-${stop.stopSequence}`}><button type="button" data-selected={alightingStop?.directionId === stop.directionId && alightingStop.stopSequence === stop.stopSequence} onClick={() => { endActiveJourney(); setAlightingStop(stop) }}><span className="sequence">{String(stop.stopSequence).padStart(2, '0')}</span><strong>{stop.stopName}</strong><span>{stop.directionName}</span></button></li>)}</ul> : null}
-          </section>
-        </div>
+        <section className="flow-card stop-card" aria-labelledby="alighting-heading" data-locked={!boardingStop}>
+          <header className="section-header optional"><span>선택</span><div><h2 id="alighting-heading">어디서 내리나요?</h2><p>{boardingStop ? '내릴 곳을 고르면 정차 여부까지 확인해요.' : '승차 정류장을 먼저 선택해 주세요.'}</p></div></header>
+          {boardingStop && destinationQuery.isPending ? <QueryState message="하차 가능한 정류장을 찾고 있어요." /> : null}
+          {destinationQuery.isError ? <QueryState message="하차 정류장을 불러오지 못했어요." action="다시 시도" onAction={() => destinationQuery.refetch()} /> : null}
+          {destinationQuery.data?.length ? <TextField variant="box" label="하차 정류장 검색" labelOption="sustain" id="alighting-stop-query" name="alightingStopQuery" type="search" value={alightingStopQuery} onChange={(event) => setAlightingStopQuery(event.target.value)} placeholder="정류장 이름 또는 순번" autoComplete="off" /> : null}
+          {filteredAlightingStops.length ? <ul className="selection-list stop-list" aria-label="하차 정류장">{filteredAlightingStops.map((stop) => {
+            const selected = alightingStop?.directionId === stop.directionId && alightingStop.stopSequence === stop.stopSequence
+            return <li key={`${stop.directionId}-${stop.stopSequence}`}><button type="button" data-selected={selected} onClick={() => { endActiveJourney(); setAlightingStop(stop) }}><span className="stop-sequence">{String(stop.stopSequence).padStart(2, '0')}</span><span className="list-copy"><strong>{stop.stopName}</strong><small>{stop.directionName}</small></span><span className="select-mark" aria-hidden="true">{selected ? '✓' : '›'}</span></button></li>
+          })}</ul> : null}
+        </section>
 
         <section id="decision-section" className="decision-section" aria-labelledby="decision-heading" data-active={Boolean(boardingStop && location)}>
-          <div className="decision-setup">
-            <div className="panel-heading inverse"><span>04</span><div><h2 id="decision-heading">지금 탈 수 있는지 계산해 볼까요?</h2><p>{boardingStop ? `${boardingStop.stopName}${alightingStop ? ` → ${alightingStop.stopName}` : ''}` : '위치와 승차 정류장을 선택하세요.'}</p></div></div>
-            <button className="signal-button" type="button" onClick={startJourney} disabled={!location || !boardingStop || journeyState === 'starting'}>{journeyState === 'starting' ? '위치와 차량 계산 중…' : journeyId ? '처음부터 다시 계산' : '탑승 가능성 계산'}</button>
-          </div>
-          {selectedBoardingAccess?.isRemote && boardingStop ? (
-            <div className="boarding-distance-notice" role="status">
-              <span aria-hidden="true" />
-              <div>
-                <strong>현재 위치에서 {boardingStop.stopName}까지 {formatDistance(selectedBoardingAccess.distanceM)}</strong>
-                <p>보통 걸음으로 {formatDuration(selectedBoardingAccess.walkMinutes)}이 예상돼요. 지금 출발하는 차량은 놓칠 가능성이 높습니다.</p>
-              </div>
-            </div>
-          ) : null}
+          <div className="decision-setup"><div><span>4 · 실시간 판단</span><h2 id="decision-heading">이제 탈 수 있는지<br />계산해 볼게요</h2><p>{boardingStop ? `${boardingStop.stopName}${alightingStop ? ` → ${alightingStop.stopName}` : ''}` : '위치와 승차 정류장을 선택해 주세요.'}</p></div><Button type="button" display="full" size="xlarge" color="light" onClick={startJourney} disabled={!location || !boardingStop} loading={journeyState === 'starting'}>{journeyId ? '다시 계산하기' : '탑승 가능성 계산'}</Button></div>
+          {selectedBoardingAccess?.isRemote && boardingStop ? <div className="distance-notice" role="status"><strong>{boardingStop.stopName}까지 {formatDistance(selectedBoardingAccess.distanceM)}</strong><p>보통 걸음으로 {formatDuration(selectedBoardingAccess.walkMinutes)}이 예상돼요. 첫 차량은 놓칠 가능성이 높아요.</p></div> : null}
           {!location || !boardingStop ? <QueryState message={!location ? '먼저 출발 위치를 확인해 주세요.' : '승차 정류장을 선택하면 계산할 수 있어요.'} /> : null}
           {journeyError ? <QueryState message={journeyError} action={journeyId ? '다시 계산' : '다시 시작'} onAction={() => journeyId ? decisionQuery.refetch() : startJourney()} /> : null}
           {journeyId && decisionQuery.isPending ? <QueryState message="내 도착 시간과 접근 차량을 비교하고 있어요." /> : null}
@@ -659,8 +660,7 @@ export function TransitJourneyPage() {
           {decisionQuery.data ? <DecisionPanel decision={decisionQuery.data} routeStops={stopQuery.data ?? []} access={selectedBoardingAccess} boardingStopName={boardingStop?.stopName ?? null} locationAccuracyM={location?.accuracyM} onStop={endActiveJourney} /> : null}
         </section>
       </main>
-
-      <footer className="site-footer"><span>첫차 / GO?</span><span>확률은 실시간 위치와 교통 상황에 따라 달라질 수 있습니다.</span></footer>
+      <footer className="site-footer"><strong>첫차</strong><span>실시간 데이터에 따라 탑승 가능성은 달라질 수 있어요.</span></footer>
     </div>
   )
 }
