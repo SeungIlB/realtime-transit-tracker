@@ -95,7 +95,7 @@
 .distance-notice p { margin: 6px 0 0; color: #d1d6db; font-size: 13px; line-height: 1.55; }
 .decision-content { margin-top: 36px; animation: reveal 220ms ease-out; }
 .decision-hero { display: grid; grid-template-columns: 1.3fr .7fr; gap: 28px; align-items: end; }
-.decision-hero h2 { margin-top: 10px; font-size: clamp(32px, 5vw, 52px); line-height: 1.12; }
+.decision-hero h2 { margin-top: 10px; font-size: clamp(32px, 5vw, 52px); line-height: 1.12; word-break: keep-all; overflow-wrap: break-word; }
 .decision-hero > div > p:last-child { margin: 13px 0 0; color: #b0b8c1; line-height: 1.6; }
 .decision-hero dl { display: grid; grid-template-columns: repeat(3, 1fr); margin: 0; padding: 20px 0; border-top: 1px solid rgb(255 255 255 / 14%); border-bottom: 1px solid rgb(255 255 255 / 14%); }
 .decision-hero dl div { padding: 0 12px; }
