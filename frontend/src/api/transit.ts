@@ -64,7 +64,8 @@ export function searchTransitLines(
     params.set('latitude', String(location.latitude))
     params.set('longitude', String(location.longitude))
   }
-  return fetchApi<TransitLine[]>(`/api/v1/lines?${params}`, signal, LINE_SEARCH_TIMEOUT_MS)
+  const timeoutMs = provider === 'NATIONAL_PRECISION_BUS' ? LINE_SEARCH_TIMEOUT_MS : undefined
+  return fetchApi<TransitLine[]>(`/api/v1/lines?${params}`, signal, timeoutMs)
 }
 
 export function fetchDirectedStops(lineId: string, signal?: AbortSignal) {

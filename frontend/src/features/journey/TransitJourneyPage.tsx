@@ -390,7 +390,7 @@ export function TransitJourneyPage() {
     queryKey: ['transit-lines', provider, submittedQuery, submittedLineLocation?.latitude, submittedLineLocation?.longitude],
     queryFn: ({ signal }) => searchTransitLines(provider, submittedQuery, submittedLineLocation, signal),
     enabled: submittedQuery.length > 0 && (provider !== 'NATIONAL_PRECISION_BUS' || submittedLineLocation !== null),
-    retry: false,
+    retry: provider === 'NATIONAL_PRECISION_BUS' ? false : 1,
   })
   const stopQuery = useQuery({ queryKey: ['directed-stops', selectedLine?.id], queryFn: ({ signal }) => fetchDirectedStops(selectedLine!.id, signal), enabled: selectedLine !== null })
   const destinationQuery = useQuery({ queryKey: ['destination-stops', selectedLine?.id, boardingStop?.directionId, boardingStop?.stopId], queryFn: ({ signal }) => fetchDestinationStops(selectedLine!.id, boardingStop!.directionId, boardingStop!.stopId, signal), enabled: selectedLine !== null && boardingStop !== null })
