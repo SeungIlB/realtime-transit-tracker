@@ -10,12 +10,13 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
+import com.realtimetransit.backend.common.quota.ExternalApiQuotaService;
 import com.realtimetransit.backend.provider.client.dto.ExternalDirection;
 import com.realtimetransit.backend.provider.client.dto.ExternalStop;
-import com.realtimetransit.backend.common.quota.ExternalApiQuotaService;
 
 import tools.jackson.databind.ObjectMapper;
 
@@ -26,18 +27,13 @@ class NationalBusClientTest {
 	@Test
 	void identifiesNearbyGyeonggiRegionWhileSearchingLines() {
 		NationalBusReferenceClient referenceClient = mock(NationalBusReferenceClient.class);
-		when(referenceClient.findNearbyStops(any(BigDecimal.class), any(BigDecimal.class))).thenReturn(List.of(
-				objectMapper.readTree("""
-						{"citycode":31200,"nodeid":"GGB229000509"}
-						""")));
+		when(referenceClient.findNearbyCityCodes(any(BigDecimal.class), any(BigDecimal.class)))
+				.thenReturn(List.of("31200"));
 		when(referenceClient.findRoutes("31200", "033")).thenReturn(List.of(
 				objectMapper.readTree("""
 						{"routeid":"GGB229000006","routeno":"033","startnodenm":"금촌","endnodenm":"탄현"}
 						""")));
-		when(referenceClient.findCityCodes()).thenReturn(List.of(
-				objectMapper.readTree("""
-						{"citycode":31200,"cityname":"파주시"}
-						""")));
+		when(referenceClient.findCityNamesByCode()).thenReturn(Map.of("31200", "파주시"));
 		NationalBusClient client = new NationalBusClient(
 				mock(ExternalApiQuotaService.class),
 				referenceClient,

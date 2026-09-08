@@ -14,8 +14,10 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Component;
 
+import com.realtimetransit.backend.common.cache.TransitCacheNames;
 import com.realtimetransit.backend.common.error.BusinessException;
 import com.realtimetransit.backend.common.error.ErrorCode;
 import com.realtimetransit.backend.common.quota.ExternalApiProvider;
@@ -78,6 +80,10 @@ public class NationalBusClient extends ProviderClientSupport implements TransitP
 		return searchNearbyLines(query, limit, latitude, longitude).getLines();
 	}
 
+	@Cacheable(
+			cacheNames = TransitCacheNames.TRANSIT_STATIC_DATA,
+			key = "'TAGO:nearby-lines:v2:' + #query + ':' + #limit + ':'"
+					+ " + #latitude.toPlainString() + ':' + #longitude.toPlainString()")
 	public NationalBusLineSearchResult searchNearbyLines(
 			String query,
 			int limit,
@@ -89,10 +95,7 @@ public class NationalBusClient extends ProviderClientSupport implements TransitP
 					"latitude and longitude are required for nationwide bus search");
 		}
 		String normalizedQuery = query.strip().toLowerCase(Locale.ROOT);
-		List<String> cityCodes = referenceClient.findNearbyStops(latitude, longitude).stream()
-				.map(item -> text(item, "citycode"))
-				.filter(Objects::nonNull)
-				.distinct()
+		List<String> cityCodes = referenceClient.findNearbyCityCodes(latitude, longitude).stream()
 				.limit(MAX_NEARBY_CITIES)
 				.toList();
 		Map<String, ExternalTransitLine> lines = new LinkedHashMap<>();
@@ -113,9 +116,8 @@ public class NationalBusClient extends ProviderClientSupport implements TransitP
 			List<String> cityCodes) {
 		List<String> nearbyGyeonggiRegionNames = cityCodes.stream().noneMatch(cityCode -> cityCode.startsWith("31"))
 				? List.of()
-				: referenceClient.findCityCodes().stream()
-						.filter(item -> cityCodes.contains(text(item, "citycode")))
-						.map(item -> text(item, "cityname"))
+				: cityCodes.stream()
+						.map(referenceClient.findCityNamesByCode()::get)
 						.filter(Objects::nonNull)
 						.toList();
 		return NationalBusLineSearchResult.builder()

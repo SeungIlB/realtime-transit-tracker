@@ -120,14 +120,17 @@ public class TransitExternalCollectionServiceImpl implements TransitExternalColl
 			List<ExternalTransitLine> externalLines) {
 		if (externalLines.isEmpty()) return List.of();
 		TransitProviderEntity provider = provider(providerCode);
+		List<String> providerLineIds = externalLines.stream()
+				.map(ExternalTransitLine::getProviderLineId)
+				.distinct()
+				.toList();
 		List<TransitLineSyncRequest> requests = externalLines.stream()
 				.map(line -> TransitLineSyncRequest.builder().providerLineId(line.getProviderLineId())
 						.publicName(line.getPublicName()).operatorName(line.getOperatorName())
 						.routeType(line.getRouteType()).active(true).sourceUpdatedAt(line.getSourceUpdatedAt()).build())
 				.toList();
 		referenceSyncService.upsertTransitLines(provider.getId(), requests);
-		return transitLineMapper.findActiveLinesByProviderLineIds(
-				provider.getId(), externalLines.stream().map(line -> line.getProviderLineId()).toList());
+		return transitLineMapper.findActiveLinesByProviderLineIds(provider.getId(), providerLineIds);
 	}
 
 	private static boolean servesAnyRegion(ExternalTransitLine line, List<String> regionNames) {

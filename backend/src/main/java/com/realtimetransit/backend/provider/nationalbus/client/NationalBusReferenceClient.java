@@ -2,16 +2,19 @@ package com.realtimetransit.backend.provider.nationalbus.client;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
-import org.springframework.stereotype.Component;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
+import com.realtimetransit.backend.common.cache.TransitCacheNames;
 import com.realtimetransit.backend.common.error.BusinessException;
 import com.realtimetransit.backend.common.error.ErrorCode;
-import com.realtimetransit.backend.common.cache.TransitCacheNames;
 import com.realtimetransit.backend.common.quota.ExternalApiProvider;
 import com.realtimetransit.backend.common.quota.ExternalApiQuotaService;
 import com.realtimetransit.backend.provider.client.ProviderClientSupport;
@@ -44,11 +47,18 @@ public class NationalBusReferenceClient extends ProviderClientSupport {
 		this.serviceKey = decodeServiceKey(config.getServiceKey());
 	}
 
-	public List<JsonNode> findNearbyStops(BigDecimal latitude, BigDecimal longitude) {
+	@Cacheable(
+			cacheNames = TransitCacheNames.TRANSIT_STATIC_DATA,
+			key = "'TAGO:nearby-cities:v2:' + #latitude.toPlainString() + ':' + #longitude.toPlainString()")
+	public List<String> findNearbyCityCodes(BigDecimal latitude, BigDecimal longitude) {
 		return fetchAll(
 				STOP_SERVICE,
 				"/getCrdntPrxmtSttnList",
-				List.of(parameter("gpsLati", latitude), parameter("gpsLong", longitude)));
+				List.of(parameter("gpsLati", latitude), parameter("gpsLong", longitude))).stream()
+				.map(item -> text(item, "citycode"))
+				.filter(Objects::nonNull)
+				.distinct()
+				.toList();
 	}
 
 	public List<JsonNode> findRoutes(String cityCode, String routeNo) {
@@ -58,9 +68,15 @@ public class NationalBusReferenceClient extends ProviderClientSupport {
 				List.of(parameter("cityCode", cityCode), parameter("routeNo", routeNo)));
 	}
 
-	@Cacheable(cacheNames = TransitCacheNames.TRANSIT_STATIC_DATA, key = "'TAGO:city-codes'")
-	public List<JsonNode> findCityCodes() {
-		return fetchAll(ROUTE_SERVICE, "/getCtyCodeList", List.of());
+	@Cacheable(cacheNames = TransitCacheNames.TRANSIT_STATIC_DATA, key = "'TAGO:city-names:v2'")
+	public Map<String, String> findCityNamesByCode() {
+		Map<String, String> namesByCode = new LinkedHashMap<>();
+		for (JsonNode item : fetchAll(ROUTE_SERVICE, "/getCtyCodeList", List.of())) {
+			String cityCode = text(item, "citycode");
+			String cityName = text(item, "cityname");
+			if (cityCode != null && cityName != null) namesByCode.put(cityCode, cityName);
+		}
+		return Map.copyOf(namesByCode);
 	}
 
 	public List<JsonNode> findRouteStops(String cityCode, String routeId) {
