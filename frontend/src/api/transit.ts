@@ -54,9 +54,14 @@ export type UpcomingArrival = {
 export function searchTransitLines(
   provider: TransitProvider,
   query: string,
+  location?: { latitude: number; longitude: number } | null,
   signal?: AbortSignal,
 ) {
   const params = new URLSearchParams({ provider, query, limit: '20' })
+  if (location) {
+    params.set('latitude', String(location.latitude))
+    params.set('longitude', String(location.longitude))
+  }
   return fetchApi<TransitLine[]>(`/api/v1/lines?${params}`, signal)
 }
 

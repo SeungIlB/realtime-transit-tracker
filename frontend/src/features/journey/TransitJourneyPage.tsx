@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties, FormEvent } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { Button, TextField } from '../../components/ui'
 import { ApiError } from '../../api/client'
 import { searchPlaces, type PlaceSearchResult } from '../../api/geocoding'
@@ -58,6 +58,7 @@ const WALKING_DETOUR_FACTOR = 1.2
 const WALKING_SPEED_MPS = 1.3
 const DEPARTURE_PREPARATION_SECONDS = 10
 const REMOTE_BOARDING_MINUTES = 30
+const MANUAL_LOCATION_REFRESH_MS = 50_000
 
 const decisionCopy: Record<string, { title: string; detail: string }> = {
   COMFORTABLE: { title: '여유 있게 탈 수 있어요', detail: '천천히 이동해도 목표 확률을 넘습니다.' },
@@ -200,6 +201,11 @@ function probabilityPercent(value: number) {
   return Math.round(Math.max(0, Math.min(1, value)) * 100)
 }
 
+function manualLocationRefreshDue(lastUploadedAt: string | null) {
+  return !lastUploadedAt
+    || Date.now() - new Date(lastUploadedAt).getTime() >= MANUAL_LOCATION_REFRESH_MS
+}
+
 function recommendedPrediction(vehicle: VehicleBoardingPrediction) {
   return vehicle.pacePredictions.find((prediction) => prediction.recommended)
     ?? vehicle.pacePredictions.find((prediction) => prediction.paceType === vehicle.recommendedPace)
@@ -340,9 +346,12 @@ function DecisionPanel({ decision, routeStops, access, boardingStopName, locatio
       </div>
       {selectedVehicle && selectedPace ? <Timeline vehicle={selectedVehicle} pace={selectedPace} /> : null}
       {decision.vehicles.length ? (
-        <div className="vehicle-grid">
-          {decision.vehicles.map((vehicle, index) => <VehicleCard key={vehicle.arrivalPredictionId} vehicle={vehicle} index={index} selected={vehicle.providerVehicleId === decision.recommendedVehicleId} routeStops={routeStops} />)}
-        </div>
+        <>
+          <div className="vehicle-grid">
+            {decision.vehicles.map((vehicle, index) => <VehicleCard key={vehicle.arrivalPredictionId} vehicle={vehicle} index={index} selected={vehicle.providerVehicleId === decision.recommendedVehicleId} routeStops={routeStops} />)}
+          </div>
+          {decision.vehicles.length === 1 ? <p className="vehicle-count-note">현재 이 구간에 정차하는 실시간 차량은 1대만 확인됐어요. 다음 차량이 잡히면 함께 표시해요.</p> : null}
+        </>
       ) : null}
       <div className="decision-footer"><span>{formatTime(decision.calculatedAt)} 계산 · 1분마다 자동 갱신</span><Button type="button" color="light" variant="weak" size="small" onClick={onStop}>모니터링 종료</Button></div>
     </div>
@@ -350,7 +359,6 @@ function DecisionPanel({ decision, routeStops, access, boardingStopName, locatio
 }
 
 export function TransitJourneyPage() {
-  const queryClient = useQueryClient()
   const [location, setLocation] = useState<LocationSnapshot | null>(null)
   const [locationStatus, setLocationStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
   const [locationError, setLocationError] = useState<string | null>(null)
@@ -361,6 +369,7 @@ export function TransitJourneyPage() {
   const [provider, setProvider] = useState<TransitProvider>('GBIS')
   const [queryInput, setQueryInput] = useState('')
   const [submittedQuery, setSubmittedQuery] = useState('')
+  const [submittedLineLocation, setSubmittedLineLocation] = useState<Pick<LocationSnapshot, 'latitude' | 'longitude'> | null>(null)
   const [selectedLine, setSelectedLine] = useState<TransitLine | null>(null)
   const [boardingStop, setBoardingStop] = useState<DirectedStop | null>(null)
   const [alightingStop, setAlightingStop] = useState<DestinationStop | null>(null)
@@ -369,22 +378,34 @@ export function TransitJourneyPage() {
   const [journeyId, setJourneyId] = useState<string | null>(null)
   const [journeyState, setJourneyState] = useState<JourneyUiState>('idle')
   const [journeyError, setJourneyError] = useState<string | null>(null)
+  const [healthCheckSlow, setHealthCheckSlow] = useState(false)
   const lastUploadedLocation = useRef<string | null>(null)
   const locationSource = location?.source
 
   const healthQuery = useQuery({ queryKey: ['system', 'health'], queryFn: ({ signal }) => fetchSystemHealth(signal), refetchInterval: 30_000, retry: 1 })
-  const lineQuery = useQuery({ queryKey: ['transit-lines', provider, submittedQuery], queryFn: ({ signal }) => searchTransitLines(provider, submittedQuery, signal), enabled: submittedQuery.length > 0 })
+  const lineQuery = useQuery({
+    queryKey: ['transit-lines', provider, submittedQuery, submittedLineLocation?.latitude, submittedLineLocation?.longitude],
+    queryFn: ({ signal }) => searchTransitLines(provider, submittedQuery, submittedLineLocation, signal),
+    enabled: submittedQuery.length > 0 && (provider !== 'NATIONAL_PRECISION_BUS' || submittedLineLocation !== null),
+  })
   const stopQuery = useQuery({ queryKey: ['directed-stops', selectedLine?.id], queryFn: ({ signal }) => fetchDirectedStops(selectedLine!.id, signal), enabled: selectedLine !== null })
   const destinationQuery = useQuery({ queryKey: ['destination-stops', selectedLine?.id, boardingStop?.directionId, boardingStop?.stopId], queryFn: ({ signal }) => fetchDestinationStops(selectedLine!.id, boardingStop!.directionId, boardingStop!.stopId, signal), enabled: selectedLine !== null && boardingStop !== null })
   const placeQueryResult = useQuery({ queryKey: ['place-search', submittedPlaceQuery], queryFn: ({ signal }) => searchPlaces(submittedPlaceQuery, signal), enabled: submittedPlaceQuery.length > 0, staleTime: Infinity, retry: 1 })
   const decisionQuery = useQuery({
     queryKey: ['boarding-decision', journeyId],
     queryFn: async ({ signal }) => {
-      if (location?.source === 'search') {
-        await addJourneyLocation(journeyId!, {
-          ...location,
-          observedAt: new Date().toISOString(),
-        }, signal)
+      if (location) {
+        const lastUploadedAt = lastUploadedLocation.current
+        const shouldUpload = location.source === 'search'
+          ? manualLocationRefreshDue(lastUploadedAt)
+          : lastUploadedAt !== location.observedAt
+        if (shouldUpload) {
+          const locationToUpload = location.source === 'search'
+            ? { ...location, observedAt: new Date().toISOString() }
+            : location
+          await addJourneyLocation(journeyId!, locationToUpload, signal)
+          lastUploadedLocation.current = locationToUpload.observedAt
+        }
       }
       return fetchBoardingDecision(journeyId!, signal)
     },
@@ -403,12 +424,10 @@ export function TransitJourneyPage() {
   }, [locationSource])
 
   useEffect(() => {
-    if (!journeyId || !location || lastUploadedLocation.current === location.observedAt) return
-    lastUploadedLocation.current = location.observedAt
-    void addJourneyLocation(journeyId, location)
-      .then(() => queryClient.invalidateQueries({ queryKey: ['boarding-decision', journeyId] }))
-      .catch(() => setJourneyError('새 위치를 반영하지 못했어요. 다음 갱신에서 다시 시도합니다.'))
-  }, [journeyId, location, queryClient])
+    if (!healthQuery.isPending) return
+    const timer = window.setTimeout(() => setHealthCheckSlow(true), 2_000)
+    return () => window.clearTimeout(timer)
+  }, [healthQuery.isPending])
 
   const providerOption = providerOptions.find((option) => option.value === provider)!
   const healthStatus = healthQuery.isPending ? 'checking' : healthQuery.isError ? 'offline' : 'live'
@@ -493,6 +512,7 @@ export function TransitJourneyPage() {
     setProvider(nextProvider)
     setQueryInput('')
     setSubmittedQuery('')
+    setSubmittedLineLocation(null)
     setSelectedLine(null)
     setBoardingStop(null)
     setAlightingStop(null)
@@ -503,9 +523,10 @@ export function TransitJourneyPage() {
   function submitSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const nextQuery = queryInput.trim()
-    if (!nextQuery) return
+    if (!nextQuery || (provider === 'NATIONAL_PRECISION_BUS' && !location)) return
     endActiveJourney()
     setSubmittedQuery(nextQuery)
+    setSubmittedLineLocation(location ? { latitude: location.latitude, longitude: location.longitude } : null)
     setSelectedLine(null)
     setBoardingStop(null)
     setAlightingStop(null)
@@ -576,7 +597,7 @@ export function TransitJourneyPage() {
       <a className="skip-link" href="#journey-content">여정 설정으로 건너뛰기</a>
       <header className="app-bar">
         <a className="brand" href="/" aria-label="첫차 홈">첫차</a>
-        <span className="connection" data-status={healthStatus} role="status"><i aria-hidden="true" />{healthStatus === 'live' ? '실시간 연결' : healthStatus === 'checking' ? '연결 확인 중' : '연결 끊김'}</span>
+        <span className="connection" data-status={healthStatus} role="status"><i aria-hidden="true" />{healthStatus === 'live' ? '실시간 연결' : healthStatus === 'checking' ? healthCheckSlow ? '서버 준비 중' : '연결 확인 중' : '연결 끊김'}</span>
       </header>
 
       <main id="journey-content" className="journey-layout">
@@ -620,8 +641,9 @@ export function TransitJourneyPage() {
           <fieldset className="provider-tabs"><legend>교통수단 선택</legend>{providerOptions.map((option) => <label key={option.value} data-selected={provider === option.value}><input type="radio" name="transitProvider" value={option.value} checked={provider === option.value} onChange={() => changeProvider(option.value)} /><span>{option.label}</span></label>)}</fieldset>
           <form className="search-form compact" onSubmit={submitSearch} role="search">
             <TextField variant="box" label={providerOption.searchLabel} labelOption="sustain" id="line-query" name="lineQuery" value={queryInput} onChange={(event) => setQueryInput(event.target.value)} placeholder={providerOption.placeholder} autoComplete="off" />
-            <Button type="submit" display="full" size="large" loading={lineQuery.isFetching}>노선 찾기</Button>
+            <Button type="submit" display="full" size="large" loading={lineQuery.isFetching} disabled={provider === 'NATIONAL_PRECISION_BUS' && !location}>노선 찾기</Button>
           </form>
+          {provider === 'NATIONAL_PRECISION_BUS' && !location ? <QueryState message="전국 버스는 출발 위치 주변 지역의 노선을 검색해요. 먼저 위치를 선택해 주세요." /> : null}
           {lineQuery.isPending && submittedQuery ? <QueryState message="노선을 찾고 있어요." /> : null}
           {lineQuery.isError ? <QueryState message={lineErrorMessage(provider, lineQuery.error)} action="다시 시도" onAction={() => lineQuery.refetch()} /> : null}
           {lineQuery.data?.length === 0 ? <QueryState message="일치하는 노선이 없어요. 다른 번호로 검색해 보세요." /> : null}
@@ -656,6 +678,7 @@ export function TransitJourneyPage() {
           <div className="decision-setup"><div><span>4 · 실시간 판단</span><h2 id="decision-heading">이제 탈 수 있는지<br />계산해 볼게요</h2><p>{boardingStop ? `${boardingStop.stopName}${alightingStop ? ` → ${alightingStop.stopName}` : ''}` : '위치와 승차 정류장을 선택해 주세요.'}</p></div><Button type="button" display="full" size="xlarge" color="light" onClick={startJourney} disabled={!location || !boardingStop} loading={journeyState === 'starting'}>{journeyId ? '다시 계산하기' : '탑승 가능성 계산'}</Button></div>
           {selectedBoardingAccess?.isRemote && boardingStop ? <div className="distance-notice" role="status"><strong>{boardingStop.stopName}까지 {formatDistance(selectedBoardingAccess.distanceM)}</strong><p>보통 걸음으로 {formatDuration(selectedBoardingAccess.walkMinutes)}이 예상돼요. 첫 차량은 놓칠 가능성이 높아요.</p></div> : null}
           {!location || !boardingStop ? <QueryState message={!location ? '먼저 출발 위치를 확인해 주세요.' : '승차 정류장을 선택하면 계산할 수 있어요.'} /> : null}
+          {journeyState === 'starting' ? <QueryState message={healthQuery.isPending ? '서버를 준비하고 있어요. 무료 서버가 깨어나는 데 최대 2분 정도 걸릴 수 있어요.' : '여정과 현재 위치를 저장하고 있어요.'} /> : null}
           {journeyError ? <QueryState message={journeyError} action={journeyId ? '다시 계산' : '다시 시작'} onAction={() => journeyId ? decisionQuery.refetch() : startJourney()} /> : null}
           {journeyId && decisionQuery.isPending ? <QueryState message="내 도착 시간과 접근 차량을 비교하고 있어요." /> : null}
           {decisionQuery.isError ? <QueryState message="최신 탑승 판단을 불러오지 못했어요." action="다시 확인" onAction={() => decisionQuery.refetch()} /> : null}

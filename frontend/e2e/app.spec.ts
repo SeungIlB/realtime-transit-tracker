@@ -15,6 +15,8 @@ test('creates a journey and shows the boarding decision', async ({ context, page
   const firstVehicleAt = new Date(now + 6 * 60_000).toISOString()
   const nextVehicleAt = new Date(now + 13 * 60_000).toISOString()
   const travelerAt = new Date(now + 4 * 60_000).toISOString()
+  let locationRequestCount = 0
+  let decisionRequestCount = 0
 
   await page.route('**/api/v1/**', async (route) => {
     const request = route.request()
@@ -38,10 +40,12 @@ test('creates a journey and shows the boarding decision', async ({ context, page
       expect(payload).toMatchObject({ lineId: 'line-1', directionId: 'direction-1', boardingStopId: 'stop-1', alightingStopId: 'stop-2', targetProbability: null })
       body = { journeyId: 'journey-1', ...payload, status: 'ACTIVE', expiresAt: new Date(now + 60 * 60_000).toISOString(), createdAt: new Date().toISOString() }
     } else if (url.pathname === '/api/v1/journeys/journey-1/locations') {
+      locationRequestCount += 1
       expect(request.method()).toBe('POST')
       expect(request.postDataJSON()).toMatchObject({ latitude: 37.1, longitude: 127.1, accuracyM: 12 })
       body = { locationObservationId: 1, journeyId: 'journey-1' }
     } else if (url.pathname === '/api/v1/journeys/journey-1/decision') {
+      decisionRequestCount += 1
       const pacePredictions = [
         { paceType: 'SLOW_WALK', speedMps: 0.9, distanceM: 180, minExpectedAt: travelerAt, expectedAt: travelerAt, maxExpectedAt: travelerAt, boardingProbability: 0.62, recommended: false },
         { paceType: 'WALK', speedMps: 1.3, distanceM: 180, minExpectedAt: travelerAt, expectedAt: travelerAt, maxExpectedAt: travelerAt, boardingProbability: 0.92, recommended: true },
@@ -72,9 +76,9 @@ test('creates a journey and shows the boarding decision', async ({ context, page
 
   await page.goto('/')
 
-  await expect(page.getByRole('heading', { name: '지금 나가면 탈 수 있을까?' })).toBeVisible()
-  await page.getByRole('button', { name: '내 위치 확인' }).click()
-  await expect(page.getByText('현재 위치를 사용하고 있어요', { exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '지금 나가면 탈 수 있을까요?' })).toBeVisible()
+  await page.getByRole('button', { name: '내 위치 사용하기' }).click()
+  await expect(page.getByText(/위치 정확도 약 12m/)).toBeVisible()
 
   await page.getByLabel('경기버스 번호').fill('6601')
   await page.getByRole('button', { name: /노선 찾기/ }).click()
@@ -88,7 +92,13 @@ test('creates a journey and shows the boarding decision', async ({ context, page
   await expect(page.getByText('경기70바1000')).toBeVisible()
   await expect(page.getByText('경기70바1001')).toBeVisible()
   await expect(page.getByText('테스트 이전 정류장 출발')).toBeVisible()
-  await expect(page.getByText(/1분마다 갱신/)).toBeVisible()
+  await expect(page.getByText(/1분마다 자동 갱신/)).toBeVisible()
+
+  await context.setGeolocation({ latitude: 37.1001, longitude: 127.1001, accuracy: 10 })
+  await context.setGeolocation({ latitude: 37.1002, longitude: 127.1002, accuracy: 9 })
+  await page.waitForTimeout(500)
+  expect(locationRequestCount).toBe(1)
+  expect(decisionRequestCount).toBe(1)
 })
 
 test('explains missing GBIS authorization on the provider screen', async ({ page }) => {
@@ -106,6 +116,18 @@ test('explains missing GBIS authorization on the provider screen', async ({ page
   await page.getByRole('button', { name: /노선 찾기/ }).click()
 
   await expect(page.getByText(/경기버스 노선정보 인증을 확인하지 못했어요/)).toBeVisible()
+})
+
+test('explains that a sleeping backend is being prepared', async ({ page }) => {
+  await page.route('**/api/v1/system/health', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 5_000))
+    await route.fulfill({ json: success({ status: 'UP', checkedAt: new Date().toISOString() }) })
+  })
+
+  await page.goto('/')
+
+  await expect(page.getByText('서버 준비 중')).toBeVisible({ timeout: 4_000 })
+  await expect(page.getByText('실시간 연결')).toBeVisible({ timeout: 3_000 })
 })
 
 test('uses a searched place instead of raw coordinates', async ({ page }) => {
@@ -132,7 +154,7 @@ test('uses a searched place instead of raw coordinates', async ({ page }) => {
   await page.getByRole('button', { name: /용산역.*서울특별시/ }).click()
 
   await expect(page.getByText('용산역, 한강로동, 용산구', { exact: true })).toBeVisible()
-  await expect(page.getByText(/검색한 위치를 출발점으로 사용해요/)).toBeVisible()
+  await expect(page.getByText(/검색한 장소를 출발점으로 사용해요/)).toBeVisible()
 })
 
 test('cancels a newly created journey when its initial location cannot be saved', async ({ context, page }) => {
@@ -172,7 +194,7 @@ test('cancels a newly created journey when its initial location cannot be saved'
   })
 
   await page.goto('/')
-  await page.getByRole('button', { name: '내 위치 확인' }).click()
+  await page.getByRole('button', { name: '내 위치 사용하기' }).click()
   await page.getByLabel('경기버스 번호').fill('1')
   await page.getByRole('button', { name: /노선 찾기/ }).click()
   await page.getByRole('button', { name: /1 테스트/ }).click()
