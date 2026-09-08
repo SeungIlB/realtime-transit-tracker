@@ -4,7 +4,7 @@
 
 ## 현재 상태
 
-백엔드와 웹 MVP가 연결되어 있으며, 노선·정류장 데이터가 없을 때 공식 외부 API를 호출해 자동 동기화합니다. 전국 초정밀버스의 노선·정류장·차량 위치와 서울 지하철의 노선·역·실시간 도착정보를 지원합니다. 국가철도공단 역별 시간표를 결합해 급행·특급 열차의 하차역 정차 여부를 판정하며, GBIS와 각 외부 API에 맞는 활용신청 승인이 필요합니다.
+백엔드와 웹 MVP가 연결되어 있으며, 노선·정류장 데이터가 없을 때 공식 외부 API를 호출해 자동 동기화합니다. TAGO 전국 버스의 지역별 노선·정류장·도착·차량 위치와 서울 지하철의 노선·역·실시간 도착정보를 지원합니다. 국가철도공단 역별 시간표를 결합해 급행·특급 열차의 하차역 정차 여부를 판정하며, GBIS와 각 외부 API에 맞는 활용신청 승인이 필요합니다.
 
 노선·역·정류장과 정차 패턴은 마스터 데이터로 유지합니다. 차량 위치, 도착 예측과 외부 API 원본 관측은 저장 시점부터 최대 2시간 보존하며, 백엔드 유지보수 스케줄러가 10분마다 만료 데이터를 순차 삭제합니다.
 
@@ -13,7 +13,7 @@
 - [개발 가이드](./DEVELOPMENT_GUIDE.md): 제품 범위, 도메인 모델, API 설계, 구현 순서, 테스트 및 완료 조건
 - [클래스 다이어그램](./CLASS_DIAGRAM.md): Spring 계층, 도메인 모델, 공급자 어댑터와 조회 흐름
 - [테이블 다이어그램](./DATABASE_ERD.md): PostgreSQL ERD, 제약조건, 인덱스와 보존 정책
-- [외부 API 연동 가이드](./API_INTEGRATION_GUIDE.md): GBIS와 전국 초정밀버스 API 역할, 필드 매핑 및 검증 절차
+- [외부 API 연동 가이드](./API_INTEGRATION_GUIDE.md): GBIS와 전국 버스 API 역할, 필드 매핑 및 검증 절차
 
 문서 안에서 아이디어와 구현 상세가 충돌할 경우 `개발 결정 사항`과 뒤쪽의 상세 설계를 우선합니다.
 
@@ -47,7 +47,7 @@
 
 ### 1. 환경변수
 
-필요하면 `.env.example`을 `.env`로 복사하고 값을 변경합니다. 기본 PostgreSQL·Redis 값은 별도 설정 없이 동작합니다. 외부 연동에는 `GBIS_SERVICE_KEY`, `NATIONAL_PRECISION_BUS_SERVICE_KEY`, `SEOUL_SUBWAY_SERVICE_KEY`, `KRIC_SERVICE_KEY`를 사용하며 실제 API 키는 `.env`에만 저장합니다. `KRIC_SERVICE_KEY`가 없으면 일반열차는 기존 정차 패턴을 사용하고 급행·특급은 정차 여부를 `UNKNOWN`으로 보존하며, 목적지가 선택된 추천 후보에서는 제외합니다. 공휴일 시간표가 필요한 날짜는 `KRIC_HOLIDAY_DATES=2026-09-25,2026-10-03`처럼 쉼표로 구분해 지정합니다.
+필요하면 `.env.example`을 `.env`로 복사하고 값을 변경합니다. 기본 PostgreSQL·Redis 값은 별도 설정 없이 동작합니다. 외부 연동에는 `GBIS_SERVICE_KEY`, `TAGO_SERVICE_KEY`, `SEOUL_SUBWAY_SERVICE_KEY`, `KRIC_SERVICE_KEY`를 사용하며 실제 API 키는 `.env`에만 저장합니다. 기존 배포의 `NATIONAL_PRECISION_BUS_SERVICE_KEY`도 TAGO 키의 대체 환경변수로 계속 인식합니다. `KRIC_SERVICE_KEY`가 없으면 일반열차는 기존 정차 패턴을 사용하고 급행·특급은 정차 여부를 `UNKNOWN`으로 보존하며, 목적지가 선택된 추천 후보에서는 제외합니다. 공휴일 시간표가 필요한 날짜는 `KRIC_HOLIDAY_DATES=2026-09-25,2026-10-03`처럼 쉼표로 구분해 지정합니다.
 
 ### 2. PostgreSQL과 Redis
 
@@ -95,7 +95,7 @@ Flyway가 백엔드 최초 기동 시 스키마를 자동 생성합니다.
 - `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`
 - `CORS_ALLOWED_ORIGINS`: 최초에는 예정된 Vercel 주소, 배포 후에는 실제 주소(예: `https://example.vercel.app`)
 - `GBIS_SERVICE_KEY`
-- `NATIONAL_PRECISION_BUS_SERVICE_KEY`
+- `TAGO_SERVICE_KEY` 또는 기존 `NATIONAL_PRECISION_BUS_SERVICE_KEY`
 - `SEOUL_SUBWAY_SERVICE_KEY`
 - `SEOUL_SUBWAY_REFERENCE_SERVICE_KEY`
 - `KRIC_SERVICE_KEY`

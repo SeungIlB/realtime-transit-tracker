@@ -76,6 +76,7 @@ journey:
 transit:
   arrival:
     observation-freshness: 2m
+    collection-refresh-interval: 30s
   maintenance:
     interval: 10m
     observation-retention: 2h
@@ -90,8 +91,8 @@ transit:
       base-url: https://apis.data.go.kr
       service-key: ${GBIS_SERVICE_KEY:}
     national-precision-bus:
-      base-url: ${NATIONAL_PRECISION_BUS_BASE_URL:https://apis.data.go.kr/B551982/rte}
-      service-key: ${NATIONAL_PRECISION_BUS_SERVICE_KEY:}
+      base-url: ${TAGO_BUS_BASE_URL:https://apis.data.go.kr/1613000}
+      service-key: ${TAGO_SERVICE_KEY:${NATIONAL_PRECISION_BUS_SERVICE_KEY:}}
     seoul-subway:
       base-url: ${SEOUL_SUBWAY_BASE_URL:http://swopenAPI.seoul.go.kr/api/subway}
       reference-base-url: ${SEOUL_OPEN_DATA_BASE_URL:http://openapi.seoul.go.kr:8088}

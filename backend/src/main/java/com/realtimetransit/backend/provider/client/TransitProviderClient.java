@@ -1,5 +1,6 @@
 package com.realtimetransit.backend.provider.client;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 import com.realtimetransit.backend.common.quota.ExternalApiProvider;
@@ -12,6 +13,14 @@ public interface TransitProviderClient {
 	ExternalApiProvider provider();
 
 	List<ExternalTransitLine> searchLines(String query, int limit);
+
+	default List<ExternalTransitLine> searchLines(
+			String query,
+			int limit,
+			BigDecimal latitude,
+			BigDecimal longitude) {
+		return searchLines(query, limit);
+	}
 
 	ExternalRouteReference fetchRoute(String providerLineId);
 

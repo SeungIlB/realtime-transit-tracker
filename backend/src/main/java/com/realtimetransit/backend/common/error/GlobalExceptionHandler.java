@@ -8,7 +8,10 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 
 import com.realtimetransit.backend.common.dto.ResponseDTO;
 
+import lombok.extern.slf4j.Slf4j;
+
 @RestControllerAdvice
+@Slf4j
 public class GlobalExceptionHandler {
 
 	@ExceptionHandler(BusinessException.class)
@@ -27,6 +30,7 @@ public class GlobalExceptionHandler {
 
 	@ExceptionHandler(Exception.class)
 	public ResponseEntity<ResponseDTO<Void>> handleUnexpectedException(Exception exception) {
+		log.error("Unhandled request exception", exception);
 		ErrorCode errorCode = ErrorCode.INTERNAL_SERVER_ERROR;
 		return ResponseEntity.status(errorCode.getStatus())
 				.body(ResponseDTO.failure(errorCode.getCode(), errorCode.getMessage()));

@@ -22,6 +22,10 @@ public interface TransitLineMapper {
 			@Param("query") String query,
 			@Param("limit") int limit);
 
+	List<TransitLineEntity> findActiveLinesByProviderLineIds(
+			@Param("providerId") long providerId,
+			@Param("providerLineIds") List<String> providerLineIds);
+
 	void upsertTransitLine(TransitLineEntity line);
 
 	int deactivateTransitLinesNotInProviderLineIds(

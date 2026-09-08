@@ -90,6 +90,10 @@ class TransitLineMapperIntegrationTest {
 		transitLineMapper.upsertTransitLine(line);
 		transitStopMapper.upsertTransitStop(stop);
 		transitStopMapper.upsertTransitStop(destinationStop);
+		assertThat(transitLineMapper.findActiveLinesByProviderLineIds(
+				providerId, List.of("route-1", "missing-route")))
+				.extracting(TransitLineEntity::getProviderLineId)
+				.containsExactly("route-1");
 
 		UUID directionId = UUID.randomUUID();
 		routeDirectionMapper.upsertRouteDirection(new RouteDirectionEntity(

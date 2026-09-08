@@ -1,5 +1,6 @@
 package com.realtimetransit.backend.provider.service.impl;
 
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -64,15 +65,22 @@ public class TransitExternalCollectionServiceImpl implements TransitExternalColl
 	private final Clock clock;
 
 	@Override
-	public void searchAndSynchronizeLines(String providerCode, String query, int limit) {
+	public List<String> searchAndSynchronizeLines(
+			String providerCode,
+			String query,
+			int limit,
+			BigDecimal latitude,
+			BigDecimal longitude) {
 		TransitProviderEntity provider = provider(providerCode);
 		TransitProviderClient client = client(providerCode);
-		List<TransitLineSyncRequest> requests = client.searchLines(query, limit).stream()
+		var externalLines = client.searchLines(query, limit, latitude, longitude);
+		List<TransitLineSyncRequest> requests = externalLines.stream()
 				.map(line -> TransitLineSyncRequest.builder().providerLineId(line.getProviderLineId())
 						.publicName(line.getPublicName()).operatorName(line.getOperatorName())
 						.routeType(line.getRouteType()).active(true).sourceUpdatedAt(line.getSourceUpdatedAt()).build())
 				.toList();
 		if (!requests.isEmpty()) referenceSyncService.upsertTransitLines(provider.getId(), requests);
+		return externalLines.stream().map(line -> line.getProviderLineId()).toList();
 	}
 
 	@Override
@@ -213,7 +221,9 @@ public class TransitExternalCollectionServiceImpl implements TransitExternalColl
 					.nextProviderStopId(next).platformId(stop.getPlatformId()).displayDirection(direction.getDisplayName()).build());
 		}
 		String origin = stops.isEmpty() ? null : stops.getFirst().getProviderStopId();
-		String terminal = stops.isEmpty() ? null : stops.getLast().getProviderStopId();
+		String terminal = stops.isEmpty() || stops.getLast().getProviderStopId().equals(origin)
+				? null
+				: stops.getLast().getProviderStopId();
 		String next = stops.size() < 2 ? null : stops.get(1).getProviderStopId();
 		return RouteDirectionSyncRequest.builder().providerDirectionId(direction.getProviderDirectionId())
 				.originProviderStopId(origin).terminalProviderStopId(terminal).representativeNextProviderStopId(next)

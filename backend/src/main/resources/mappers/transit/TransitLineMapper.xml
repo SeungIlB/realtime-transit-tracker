@@ -70,6 +70,22 @@
         LIMIT #{limit}
     </select>
 
+    <select id="findActiveLinesByProviderLineIds" resultMap="transitLineRowMap">
+        SELECT <include refid="transitLineColumns" />
+        FROM transit_line
+        WHERE provider_id = #{providerId}
+          AND active = TRUE
+          AND provider_line_id IN
+          <foreach collection="providerLineIds"
+                   item="providerLineId"
+                   open="("
+                   separator=","
+                   close=")">
+              #{providerLineId}
+          </foreach>
+        ORDER BY CHAR_LENGTH(public_name), public_name, provider_line_id
+    </select>
+
     <update id="deactivateTransitLinesNotInProviderLineIds">
         UPDATE transit_line
         SET active = FALSE,

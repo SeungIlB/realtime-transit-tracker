@@ -2,7 +2,6 @@ package com.realtimetransit.backend.provider.nationalbus.client;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.math.BigDecimal;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -10,97 +9,86 @@ import org.junit.jupiter.api.Test;
 import com.realtimetransit.backend.provider.client.dto.ExternalDirection;
 import com.realtimetransit.backend.provider.client.dto.ExternalStop;
 
+import tools.jackson.databind.ObjectMapper;
+
 class NationalBusClientTest {
 
-	@Test
-	void projectsVehicleOntoStopsBeforeRequestedBoardingStop() {
-		ExternalDirection direction = ExternalDirection.builder()
-				.providerDirectionId("0")
-				.stops(List.of(
-						stop("first", "37.0000", "127.0000"),
-						stop("second", "37.0010", "127.0000"),
-						stop("target", "37.0020", "127.0000")))
-				.build();
-
-		NationalBusClient.RouteProgress progress = NationalBusClient.progress(
-				direction, "target", decimal("37.0001"), decimal("127.0000"));
-
-		assertThat(progress).isNotNull();
-		assertThat(progress.getCurrentStop().getProviderStopId()).isEqualTo("first");
-		assertThat(progress.getTargetIndex() - progress.getCurrentIndex()).isEqualTo(2);
-		assertThat(progress.getRemainingDistanceM()).isGreaterThan(200.0);
-	}
+	private final ObjectMapper objectMapper = new ObjectMapper();
 
 	@Test
-	void rejectsDirectionThatDoesNotContainRequestedStop() {
-		ExternalDirection direction = ExternalDirection.builder()
-				.providerDirectionId("1")
-				.stops(List.of(stop("different", "37.0000", "127.0000")))
-				.build();
+	void matchesOfficialArrivalToClosestVehicleByRemainingStopCount() {
+		ExternalDirection direction = direction("TAGO:0", "first", "second", "third", "target");
+		var farVehicle = objectMapper.readTree("""
+				{"nodeid":"first","vehicleno":"far"}
+				""");
+		var matchingVehicle = objectMapper.readTree("""
+				{"nodeid":"second","vehicleno":"matching"}
+				""");
 
-		assertThat(NationalBusClient.progress(
-				direction, "target", decimal("37.0000"), decimal("127.0000")))
-				.isNull();
+		NationalBusClient.ArrivalPosition position = NationalBusClient.resolvePosition(
+				List.of(direction), List.of(farVehicle, matchingVehicle), "target", 2);
+
+		assertThat(position).isNotNull();
+		assertThat(position.getDirection().getProviderDirectionId()).isEqualTo("TAGO:0");
+		assertThat(position.getCurrentStop().getProviderStopId()).isEqualTo("TAGO:25:second");
+		assertThat(position.getLocation()).isSameAs(matchingVehicle);
+		assertThat(position.getScore()).isZero();
 	}
 
 	@Test
-	void rejectsVehicleThatAlreadyPassedRequestedBoardingStop() {
-		ExternalDirection direction = ExternalDirection.builder()
-				.providerDirectionId("0")
-				.stops(List.of(
-						stop("first", "37.0000", "127.0000"),
-						stop("target", "37.0010", "127.0000"),
-						stop("passed", "37.0020", "127.0000")))
-				.build();
+	void choosesDirectionThatStillHasTheBoardingStopAhead() {
+		ExternalDirection outbound = direction("TAGO:0", "start", "target", "terminal");
+		ExternalDirection inbound = direction("TAGO:1", "terminal", "middle", "target", "start");
+		var vehicle = objectMapper.readTree("""
+				{"nodeid":"middle","vehicleno":"inbound-bus"}
+				""");
 
-		assertThat(NationalBusClient.progress(
-				direction, "target", decimal("37.0020"), decimal("127.0000")))
-				.isNull();
+		NationalBusClient.ArrivalPosition position = NationalBusClient.resolvePosition(
+				List.of(outbound, inbound), List.of(vehicle), "target", 1);
+
+		assertThat(position).isNotNull();
+		assertThat(position.getDirection().getProviderDirectionId()).isEqualTo("TAGO:1");
+		assertThat(position.getCurrentStop().getProviderStopId()).isEqualTo("TAGO:25:middle");
 	}
 
 	@Test
-	void targetsNextOccurrenceWhenCircularRouteRepeatsBoardingStop() {
-		ExternalDirection direction = ExternalDirection.builder()
-				.providerDirectionId("0")
-				.stops(List.of(
-						stop("first", "37.0000", "127.0000"),
-						stop("target", "37.0010", "127.0000"),
-						stop("middle", "37.0020", "127.0000"),
-						stop("target", "37.0030", "127.0000"),
-						stop("last", "37.0040", "127.0000")))
-				.build();
+	void infersCurrentStopWhenMunicipalityDoesNotPublishVehicleLocations() {
+		ExternalDirection direction = direction("TAGO:2", "first", "second", "third", "target");
 
-		NationalBusClient.RouteProgress progress = NationalBusClient.progress(
-				direction, "target", decimal("37.0021"), decimal("127.0000"));
+		NationalBusClient.ArrivalPosition position = NationalBusClient.resolvePosition(
+				List.of(direction), List.of(), "target", 2);
 
-		assertThat(progress).isNotNull();
-		assertThat(progress.getTargetIndex()).isEqualTo(3);
-		assertThat(progress.getCurrentStop().getProviderStopId()).isEqualTo("middle");
+		assertThat(position).isNotNull();
+		assertThat(position.getCurrentStop().getProviderStopId()).isEqualTo("TAGO:25:second");
+		assertThat(position.getLocation()).isNull();
 	}
 
 	@Test
-	void usesVehicleBearingToRejectNearbyOppositeDirectionSegment() {
-		ExternalDirection direction = ExternalDirection.builder()
-				.providerDirectionId("0")
-				.stops(List.of(
-						stop("west", "37.0000", "127.0000"),
-						stop("east", "37.0000", "127.0020"),
-						stop("target", "37.0010", "127.0020")))
+	void usesLaterOccurrenceForCircularRoute() {
+		ExternalDirection circular = direction(
+				"TAGO:2", "target", "middle", "second", "target");
+		var vehicle = objectMapper.readTree("""
+				{"nodeid":"second","vehicleno":"circular-bus"}
+				""");
+
+		NationalBusClient.ArrivalPosition position = NationalBusClient.resolvePosition(
+				List.of(circular), List.of(vehicle), "target", 1);
+
+		assertThat(position).isNotNull();
+		assertThat(position.getCurrentStop().getProviderStopId()).isEqualTo("TAGO:25:second");
+		assertThat(position.getCurrentIndex()).isEqualTo(2);
+	}
+
+	private static ExternalDirection direction(String id, String... stopIds) {
+		List<ExternalStop> stops = java.util.Arrays.stream(stopIds)
+				.map(stopId -> ExternalStop.builder()
+						.providerStopId("TAGO:25:" + stopId)
+						.publicName(stopId)
+						.build())
+				.toList();
+		return ExternalDirection.builder()
+				.providerDirectionId(id)
+				.stops(stops)
 				.build();
-
-		NationalBusClient.RouteProgress progress = NationalBusClient.progress(
-				direction, "target", decimal("37.0000"), decimal("127.0010"), decimal("90"));
-
-		assertThat(progress).isNotNull();
-		assertThat(progress.getCurrentStop().getProviderStopId()).isEqualTo("west");
-	}
-
-	private static ExternalStop stop(String id, String latitude, String longitude) {
-		return ExternalStop.builder().providerStopId(id)
-				.latitude(decimal(latitude)).longitude(decimal(longitude)).build();
-	}
-
-	private static BigDecimal decimal(String value) {
-		return new BigDecimal(value);
 	}
 }

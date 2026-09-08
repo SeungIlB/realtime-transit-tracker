@@ -1,5 +1,6 @@
 package com.realtimetransit.backend.transit.controller;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 import org.springframework.web.bind.annotation.GetMapping;
@@ -24,7 +25,10 @@ public class TransitLineController {
 	public ResponseDTO<List<TransitLineResponse>> searchLines(
 			@RequestParam(defaultValue = "GBIS") String provider,
 			@RequestParam String query,
-			@RequestParam(defaultValue = "20") int limit) {
-		return ResponseDTO.success(transitLineService.searchActiveLines(provider, query, limit));
+			@RequestParam(defaultValue = "20") int limit,
+			@RequestParam(required = false) BigDecimal latitude,
+			@RequestParam(required = false) BigDecimal longitude) {
+		return ResponseDTO.success(
+				transitLineService.searchActiveLines(provider, query, limit, latitude, longitude));
 	}
 }
