@@ -12,7 +12,11 @@ import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.cache.RedisCacheWriter;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.serializer.RedisSerializationContext.SerializationPair;
+import org.springframework.data.redis.serializer.GenericJacksonJsonRedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializer;
+
+import tools.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
+
 
 @Configuration
 @EnableCaching
@@ -42,7 +46,22 @@ public class RedisCacheConfig {
 		return RedisCacheConfiguration.defaultCacheConfig()
 				.entryTtl(ttl)
 				.disableCachingNullValues()
-				.prefixCacheNameWith("rtt:cache:")
-				.serializeValuesWith(SerializationPair.fromSerializer(RedisSerializer.json()));
+				.prefixCacheNameWith("rtt:v3:cache:")
+				.serializeValuesWith(SerializationPair.fromSerializer(jsonSerializer()));
+	}
+
+	static RedisSerializer<Object> jsonSerializer() {
+		var typeValidator = BasicPolymorphicTypeValidator.builder()
+				.allowIfSubType("com.realtimetransit.backend.")
+				.allowIfSubType("java.math.")
+				.allowIfSubType("java.time.")
+				.allowIfSubType("java.util.")
+				.allowIfSubType("tools.jackson.databind.node.")
+				.allowIfSubTypeIsArray()
+				.build();
+		return GenericJacksonJsonRedisSerializer.builder()
+				.enableDefaultTyping(typeValidator)
+				.writer((mapper, value) -> mapper.writerFor(Object.class).writeValueAsBytes(value))
+				.build();
 	}
 }
