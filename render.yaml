@@ -6,7 +6,7 @@ services:
     region: singapore
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
-    healthCheckPath: /actuator/health
+    healthCheckPath: /actuator/health/liveness
     buildFilter:
       paths:
         - backend/**
