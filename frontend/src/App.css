@@ -65,6 +65,7 @@
 .provider-tabs input:focus-visible + span { outline: 3px solid #3182f6; outline-offset: 2px; }
 .search-form { display: grid; grid-template-columns: minmax(0, 1fr) 120px; gap: 10px; align-items: end; }
 .search-form.compact { grid-template-columns: 1fr; margin-top: 24px; }
+.provider-note { margin: 10px 4px 0; color: #8b95a1; font-size: 12px; line-height: 1.5; word-break: keep-all; }
 .reveal-panel { margin-top: 20px; padding: 20px; border-radius: 20px; background: #f7f8fa; animation: reveal 200ms ease-out; }
 .inline-error { margin: 12px 0 0; color: #e42939; font-size: 14px; line-height: 1.5; }
 .attribution { margin: 12px 4px 0; color: #b0b8c1; font-size: 11px; text-align: right; }

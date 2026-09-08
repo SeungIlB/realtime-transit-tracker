@@ -34,7 +34,7 @@ const providerOptions: Array<{
 }> = [
   { value: 'NATIONAL_PRECISION_BUS', label: '전국 버스', description: '초정밀 위치', searchLabel: '버스 번호', placeholder: '예: 중구01, 1000' },
   { value: 'GBIS', label: '경기 버스', description: '도착 예정', searchLabel: '경기버스 번호', placeholder: '예: 6601, 7770' },
-  { value: 'SEOUL_SUBWAY', label: '서울 지하철', description: '실시간 도착', searchLabel: '호선 이름', placeholder: '예: 1호선, 경의중앙선' },
+  { value: 'SEOUL_SUBWAY', label: '수도권 전철', description: '실시간 도착', searchLabel: '호선 이름', placeholder: '예: 1호선, 서해선' },
 ]
 
 type LocationSnapshot = {
@@ -651,6 +651,7 @@ export function TransitJourneyPage() {
             <TextField variant="box" label={providerOption.searchLabel} labelOption="sustain" id="line-query" name="lineQuery" value={queryInput} onChange={(event) => setQueryInput(event.target.value)} placeholder={providerOption.placeholder} autoComplete="off" />
             <Button type="submit" display="full" size="large" loading={lineQuery.isFetching} disabled={provider === 'NATIONAL_PRECISION_BUS' && !location}>노선 찾기</Button>
           </form>
+          {provider === 'SEOUL_SUBWAY' ? <p className="provider-note">김포골드라인은 공개된 실시간 데이터 API가 없어 실시간 조회를 지원하지 않아요.</p> : null}
           {provider === 'NATIONAL_PRECISION_BUS' && !location ? <QueryState message="전국 버스는 출발 위치 주변 지역의 노선을 검색해요. 먼저 위치를 선택해 주세요." /> : null}
           {lineQuery.isPending && submittedQuery ? <QueryState message="노선을 찾고 있어요." /> : null}
           {lineQuery.isError ? <QueryState message={lineErrorMessage(provider, lineQuery.error)} action="다시 시도" onAction={() => lineQuery.refetch()} /> : null}
