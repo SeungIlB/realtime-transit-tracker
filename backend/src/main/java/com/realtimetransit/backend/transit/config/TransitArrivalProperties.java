@@ -13,4 +13,5 @@ import lombok.Setter;
 public class TransitArrivalProperties {
 
 	private Duration observationFreshness = Duration.ofMinutes(2);
+	private Duration collectionRefreshInterval = Duration.ofSeconds(30);
 }

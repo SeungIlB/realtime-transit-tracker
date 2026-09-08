@@ -128,6 +128,9 @@ public class BoardingDecisionServiceImpl implements BoardingDecisionService {
 		Instant observedAfter = calculatedAt.minus(arrivalProperties.getObservationFreshness());
 		List<UpcomingArrivalEntity> storedArrivals = findStoredArrivalCandidates(
 				journey, calculatedAt, observedAfter);
+		if (hasRecentlyCollectedArrival(storedArrivals, calculatedAt)) {
+			return storedArrivals;
+		}
 		try {
 			externalCollectionService.collectArrivals(
 					journey.getLineId(), journey.getBoardingStopId(), journey.getAlightingStopId());
@@ -138,6 +141,16 @@ public class BoardingDecisionServiceImpl implements BoardingDecisionService {
 		List<UpcomingArrivalEntity> refreshedArrivals = findStoredArrivalCandidates(
 				journey, calculatedAt, observedAfter);
 		return refreshedArrivals.isEmpty() ? storedArrivals : refreshedArrivals;
+	}
+
+	private boolean hasRecentlyCollectedArrival(
+			List<UpcomingArrivalEntity> arrivals,
+			Instant calculatedAt) {
+		Instant reusableAfter = calculatedAt.minus(arrivalProperties.getCollectionRefreshInterval());
+		return arrivals.stream()
+				.map(UpcomingArrivalEntity::getReceivedAt)
+				.filter(java.util.Objects::nonNull)
+				.anyMatch(receivedAt -> !receivedAt.isBefore(reusableAfter));
 	}
 
 	private List<UpcomingArrivalEntity> findStoredArrivalCandidates(

@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.times;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -43,6 +42,7 @@ class ArrivalServiceImplTest {
 	void setUp() {
 		TransitArrivalProperties properties = new TransitArrivalProperties();
 		properties.setObservationFreshness(Duration.ofMinutes(2));
+		properties.setCollectionRefreshInterval(Duration.ofSeconds(30));
 		arrivalService = new ArrivalServiceImpl(
 				arrivalQueryMapper,
 				Clock.fixed(NOW, ZoneOffset.UTC),
@@ -51,7 +51,7 @@ class ArrivalServiceImplTest {
 	}
 
 	@Test
-	void returnsTwoMinuteFreshUpcomingArrivalsAsResponses() {
+	void returnsRecentlyCollectedArrivalsWithoutCallingProviderAgain() {
 		UUID lineId = UUID.randomUUID();
 		UUID directionId = UUID.randomUUID();
 		UUID boardingStopId = UUID.randomUUID();
@@ -88,8 +88,9 @@ class ArrivalServiceImplTest {
 					assertThat(response.getCurrentStopId()).isEqualTo(currentStopId);
 					assertThat(response.getCurrentStopName()).isEqualTo("이전 정류장");
 				});
-		verify(arrivalQueryMapper, times(2)).findUpcomingArrivalsByLineIdAndBoardingStopIdAndAlightingStopId(
+		verify(arrivalQueryMapper).findUpcomingArrivalsByLineIdAndBoardingStopIdAndAlightingStopId(
 				lineId, directionId, boardingStopId, alightingStopId, NOW, NOW.minusSeconds(120), 2);
+		verifyNoInteractions(externalCollectionService);
 	}
 
 	@Test

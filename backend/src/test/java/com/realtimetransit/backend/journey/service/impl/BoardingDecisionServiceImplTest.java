@@ -67,6 +67,7 @@ class BoardingDecisionServiceImplTest {
 		properties = properties();
 		TransitArrivalProperties arrivalProperties = new TransitArrivalProperties();
 		arrivalProperties.setObservationFreshness(Duration.ofMinutes(2));
+		arrivalProperties.setCollectionRefreshInterval(Duration.ofSeconds(30));
 		service = new BoardingDecisionServiceImpl(
 				journeySessionValidator,
 				journeyLocationMapper,
@@ -132,6 +133,7 @@ class BoardingDecisionServiceImplTest {
 				.maxExpectedAt(NOW.plusSeconds(210))
 				.confidence("HIGH")
 				.observedAt(NOW.minusSeconds(5))
+				.receivedAt(NOW.minusSeconds(3))
 				.build();
 		when(arrivalQueryMapper.findUpcomingArrivalsByLineIdAndBoardingStopIdAndAlightingStopId(
 				journey.getLineId(), journey.getDirectionId(), journey.getBoardingStopId(), journey.getAlightingStopId(), NOW,
@@ -162,6 +164,7 @@ class BoardingDecisionServiceImplTest {
 			assertThat(snapshot.getModelVersion()).isEqualTo("HEURISTIC_V1");
 			assertThat(snapshot.getFactorsJson()).contains("HAVERSINE");
 		});
+		verifyNoInteractions(externalCollectionService);
 	}
 
 	private JourneySessionEntity stubPredictionInputs() {
