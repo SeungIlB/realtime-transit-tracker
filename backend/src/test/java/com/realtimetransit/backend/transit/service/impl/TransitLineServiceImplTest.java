@@ -73,11 +73,8 @@ class TransitLineServiceImplTest {
 		BigDecimal latitude = new BigDecimal("36.341858");
 		BigDecimal longitude = new BigDecimal("126.586988");
 		when(transitProviderMapper.findByCode("NATIONAL_PRECISION_BUS")).thenReturn(Optional.of(provider));
-		when(externalCollectionService.searchAndSynchronizeLines(
-				"NATIONAL_PRECISION_BUS", "101", 20, latitude, longitude))
-				.thenReturn(List.of("TAGO:34030:CNB287000002"));
-		when(transitLineMapper.findActiveLinesByProviderLineIds(
-				provider.getId(), List.of("TAGO:34030:CNB287000002")))
+		when(externalCollectionService.searchAndSynchronizeNearbyBusLines(
+				"101", 20, latitude, longitude))
 				.thenReturn(List.of(line));
 
 		assertThat(transitLineService.searchActiveLines(

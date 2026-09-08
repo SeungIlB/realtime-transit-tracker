@@ -39,10 +39,8 @@ public class TransitLineServiceImpl implements TransitLineService {
 		int safeLimit = Math.clamp(limit, 1, MAX_SEARCH_LIMIT);
 		if ("NATIONAL_PRECISION_BUS".equals(providerCode)) {
 			validateLocation(latitude, longitude);
-			List<String> providerLineIds = externalCollectionService.searchAndSynchronizeLines(
-					providerCode, normalizedQuery, safeLimit, latitude, longitude);
-			if (providerLineIds.isEmpty()) return List.of();
-			return transitLineMapper.findActiveLinesByProviderLineIds(provider.getId(), providerLineIds).stream()
+			return externalCollectionService.searchAndSynchronizeNearbyBusLines(
+					normalizedQuery, safeLimit, latitude, longitude).stream()
 					.map(TransitLineResponse::from)
 					.toList();
 		}

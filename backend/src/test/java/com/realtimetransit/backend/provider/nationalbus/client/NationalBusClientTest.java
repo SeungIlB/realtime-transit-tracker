@@ -1,19 +1,59 @@
 package com.realtimetransit.backend.provider.nationalbus.client;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
 import com.realtimetransit.backend.provider.client.dto.ExternalDirection;
 import com.realtimetransit.backend.provider.client.dto.ExternalStop;
+import com.realtimetransit.backend.common.quota.ExternalApiQuotaService;
 
 import tools.jackson.databind.ObjectMapper;
 
 class NationalBusClientTest {
 
 	private final ObjectMapper objectMapper = new ObjectMapper();
+
+	@Test
+	void identifiesNearbyGyeonggiRegionWhileSearchingLines() {
+		NationalBusReferenceClient referenceClient = mock(NationalBusReferenceClient.class);
+		when(referenceClient.findNearbyStops(any(BigDecimal.class), any(BigDecimal.class))).thenReturn(List.of(
+				objectMapper.readTree("""
+						{"citycode":31200,"nodeid":"GGB229000509"}
+						""")));
+		when(referenceClient.findRoutes("31200", "033")).thenReturn(List.of(
+				objectMapper.readTree("""
+						{"routeid":"GGB229000006","routeno":"033","startnodenm":"금촌","endnodenm":"탄현"}
+						""")));
+		when(referenceClient.findCityCodes()).thenReturn(List.of(
+				objectMapper.readTree("""
+						{"citycode":31200,"cityname":"파주시"}
+						""")));
+		NationalBusClient client = new NationalBusClient(
+				mock(ExternalApiQuotaService.class),
+				referenceClient,
+				Clock.fixed(Instant.parse("2026-09-08T00:00:00Z"), ZoneOffset.UTC));
+
+		var result = client.searchNearbyLines(
+				"033", 20, new BigDecimal("37.7599"), new BigDecimal("126.7800"));
+
+		assertThat(result.getNearbyGyeonggiRegionNames()).containsExactly("파주시");
+		assertThat(result.getLines())
+				.singleElement()
+				.satisfies(line -> {
+					assertThat(line.getPublicName()).isEqualTo("033");
+					assertThat(line.getProviderLineId()).isEqualTo("TAGO:31200:GGB229000006");
+				});
+	}
 
 	@Test
 	void matchesOfficialArrivalToClosestVehicleByRemainingStopCount() {

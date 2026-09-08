@@ -5,11 +5,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.springframework.stereotype.Component;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 import com.realtimetransit.backend.common.error.BusinessException;
 import com.realtimetransit.backend.common.error.ErrorCode;
+import com.realtimetransit.backend.common.cache.TransitCacheNames;
 import com.realtimetransit.backend.common.quota.ExternalApiProvider;
 import com.realtimetransit.backend.common.quota.ExternalApiQuotaService;
 import com.realtimetransit.backend.provider.client.ProviderClientSupport;
@@ -54,6 +56,11 @@ public class NationalBusReferenceClient extends ProviderClientSupport {
 				ROUTE_SERVICE,
 				"/getRouteNoList",
 				List.of(parameter("cityCode", cityCode), parameter("routeNo", routeNo)));
+	}
+
+	@Cacheable(cacheNames = TransitCacheNames.TRANSIT_STATIC_DATA, key = "'TAGO:city-codes'")
+	public List<JsonNode> findCityCodes() {
+		return fetchAll(ROUTE_SERVICE, "/getCtyCodeList", List.of());
 	}
 
 	public List<JsonNode> findRouteStops(String cityCode, String routeId) {

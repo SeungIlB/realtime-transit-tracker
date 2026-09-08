@@ -9,8 +9,11 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 
@@ -21,9 +24,11 @@ import com.realtimetransit.backend.provider.client.TransitProviderClient;
 import com.realtimetransit.backend.provider.client.dto.ExternalArrival;
 import com.realtimetransit.backend.provider.client.dto.ExternalDirection;
 import com.realtimetransit.backend.provider.client.dto.ExternalStop;
+import com.realtimetransit.backend.provider.client.dto.ExternalTransitLine;
 import com.realtimetransit.backend.provider.dto.request.ArrivalPredictionObservationSaveRequest;
 import com.realtimetransit.backend.provider.dto.request.VehicleRunObservationSaveRequest;
 import com.realtimetransit.backend.provider.entity.TransitProviderEntity;
+import com.realtimetransit.backend.provider.nationalbus.client.NationalBusClient;
 import com.realtimetransit.backend.provider.repository.TransitProviderMapper;
 import com.realtimetransit.backend.provider.service.ObservationService;
 import com.realtimetransit.backend.provider.service.SubwayStopConfirmationService;
@@ -54,6 +59,7 @@ public class TransitExternalCollectionServiceImpl implements TransitExternalColl
 	private static final ZoneId KOREA_ZONE = ZoneId.of("Asia/Seoul");
 	private static final Duration ARRIVAL_CLOCK_SKEW_TOLERANCE = Duration.ofSeconds(5);
 	private final TransitProviderService transitProviderService;
+	private final NationalBusClient nationalBusClient;
 	private final TransitProviderMapper transitProviderMapper;
 	private final TransitLineMapper transitLineMapper;
 	private final TransitStopMapper transitStopMapper;
@@ -81,6 +87,60 @@ public class TransitExternalCollectionServiceImpl implements TransitExternalColl
 				.toList();
 		if (!requests.isEmpty()) referenceSyncService.upsertTransitLines(provider.getId(), requests);
 		return externalLines.stream().map(line -> line.getProviderLineId()).toList();
+	}
+
+	@Override
+	public List<TransitLineEntity> searchAndSynchronizeNearbyBusLines(
+			String query,
+			int limit,
+			BigDecimal latitude,
+			BigDecimal longitude) {
+		var nationalResult = nationalBusClient.searchNearbyLines(query, limit, latitude, longitude);
+		List<TransitLineEntity> nationalLines = synchronizeAndLoadLines(
+				"NATIONAL_PRECISION_BUS", nationalResult.getLines());
+		if (nationalResult.getNearbyGyeonggiRegionNames().isEmpty()) return nationalLines;
+
+		List<ExternalTransitLine> nearbyGbisExternalLines = client("GBIS").searchLines(query, limit).stream()
+				.filter(line -> servesAnyRegion(line, nationalResult.getNearbyGyeonggiRegionNames()))
+				.toList();
+		List<TransitLineEntity> gbisLines = synchronizeAndLoadLines("GBIS", nearbyGbisExternalLines);
+		Set<String> gbisRouteNames = gbisLines.stream()
+				.map(line -> line.getPublicName().strip().toLowerCase(Locale.ROOT))
+				.collect(Collectors.toSet());
+		return java.util.stream.Stream.concat(
+				gbisLines.stream(),
+				nationalLines.stream().filter(line -> !gbisRouteNames.contains(
+						line.getPublicName().strip().toLowerCase(Locale.ROOT))))
+				.limit(limit)
+				.toList();
+	}
+
+	private List<TransitLineEntity> synchronizeAndLoadLines(
+			String providerCode,
+			List<ExternalTransitLine> externalLines) {
+		if (externalLines.isEmpty()) return List.of();
+		TransitProviderEntity provider = provider(providerCode);
+		List<TransitLineSyncRequest> requests = externalLines.stream()
+				.map(line -> TransitLineSyncRequest.builder().providerLineId(line.getProviderLineId())
+						.publicName(line.getPublicName()).operatorName(line.getOperatorName())
+						.routeType(line.getRouteType()).active(true).sourceUpdatedAt(line.getSourceUpdatedAt()).build())
+				.toList();
+		referenceSyncService.upsertTransitLines(provider.getId(), requests);
+		return transitLineMapper.findActiveLinesByProviderLineIds(
+				provider.getId(), externalLines.stream().map(line -> line.getProviderLineId()).toList());
+	}
+
+	private static boolean servesAnyRegion(ExternalTransitLine line, List<String> regionNames) {
+		if (line.getOperatorName() == null) return false;
+		String operatorRegion = line.getOperatorName().replace(" ", "").toLowerCase(Locale.ROOT);
+		return regionNames.stream()
+				.map(TransitExternalCollectionServiceImpl::normalizeRegionName)
+				.anyMatch(operatorRegion::contains);
+	}
+
+	private static String normalizeRegionName(String regionName) {
+		String normalized = regionName.replace(" ", "").toLowerCase(Locale.ROOT);
+		return normalized.replaceFirst("[시군]$", "");
 	}
 
 	@Override

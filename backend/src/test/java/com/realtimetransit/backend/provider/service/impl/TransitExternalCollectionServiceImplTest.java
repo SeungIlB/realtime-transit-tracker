@@ -2,6 +2,7 @@ package com.realtimetransit.backend.provider.service.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyMap;
@@ -31,8 +32,11 @@ import com.realtimetransit.backend.provider.client.dto.ExternalArrival;
 import com.realtimetransit.backend.provider.client.dto.ExternalDirection;
 import com.realtimetransit.backend.provider.client.dto.ExternalRouteReference;
 import com.realtimetransit.backend.provider.client.dto.ExternalStop;
+import com.realtimetransit.backend.provider.client.dto.ExternalTransitLine;
 import com.realtimetransit.backend.provider.dto.request.VehicleRunObservationSaveRequest;
 import com.realtimetransit.backend.provider.entity.TransitProviderEntity;
+import com.realtimetransit.backend.provider.nationalbus.client.NationalBusClient;
+import com.realtimetransit.backend.provider.nationalbus.dto.NationalBusLineSearchResult;
 import com.realtimetransit.backend.provider.repository.TransitProviderMapper;
 import com.realtimetransit.backend.provider.service.ObservationService;
 import com.realtimetransit.backend.provider.service.SubwayStopConfirmationService;
@@ -60,6 +64,8 @@ class TransitExternalCollectionServiceImplTest {
 	@Mock
 	private TransitProviderService transitProviderService;
 	@Mock
+	private NationalBusClient nationalBusClient;
+	@Mock
 	private TransitProviderMapper transitProviderMapper;
 	@Mock
 	private TransitLineMapper transitLineMapper;
@@ -84,6 +90,7 @@ class TransitExternalCollectionServiceImplTest {
 	void setUp() {
 		collectionService = new TransitExternalCollectionServiceImpl(
 				transitProviderService,
+				nationalBusClient,
 				transitProviderMapper,
 				transitLineMapper,
 				transitStopMapper,
@@ -93,6 +100,58 @@ class TransitExternalCollectionServiceImplTest {
 				observationService,
 				subwayStopConfirmationService,
 				Clock.fixed(NOW, ZoneOffset.UTC));
+	}
+
+	@Test
+	void doesNotSearchGbisOutsideGyeonggi() {
+		var nationalExternalLine = externalLine("TAGO:34030:1", "101", "대천역 순환");
+		var nationalLine = persistedLine(1L, "TAGO:34030:1", "101", "대천역 순환");
+		when(nationalBusClient.searchNearbyLines(any(), anyInt(), any(), any()))
+				.thenReturn(NationalBusLineSearchResult.builder()
+						.lines(List.of(nationalExternalLine))
+						.nearbyGyeonggiRegionNames(List.of())
+						.build());
+		when(transitProviderMapper.findByCode("NATIONAL_PRECISION_BUS"))
+				.thenReturn(Optional.of(provider(1L, "NATIONAL_PRECISION_BUS")));
+		when(transitLineMapper.findActiveLinesByProviderLineIds(1L, List.of("TAGO:34030:1")))
+				.thenReturn(List.of(nationalLine));
+
+		assertThat(collectionService.searchAndSynchronizeNearbyBusLines(
+				"101", 20, new java.math.BigDecimal("36.341858"), new java.math.BigDecimal("126.586988")))
+				.containsExactly(nationalLine);
+		verify(transitProviderService, never()).getClient(ExternalApiProvider.GBIS);
+	}
+
+	@Test
+	void supplementsGyeonggiSearchWithGbisAndPrefersGbisForSameRouteNumber() {
+		var national033 = externalLine("TAGO:31100:1", "033", "중부대학교 → 삼송역");
+		var gbisGoyang033 = externalLine("241328006", "033", "고양");
+		var gbisPaju033 = externalLine("241439006", "033", "파주");
+		var persistedNational033 = persistedLine(1L, "TAGO:31100:1", "033", "중부대학교 → 삼송역");
+		var persistedPaju033 = persistedLine(2L, "241439006", "033", "파주");
+
+		when(nationalBusClient.searchNearbyLines(any(), anyInt(), any(), any()))
+				.thenReturn(NationalBusLineSearchResult.builder()
+						.lines(List.of(national033))
+						.nearbyGyeonggiRegionNames(List.of("파주시"))
+						.build());
+		when(transitProviderMapper.findByCode("NATIONAL_PRECISION_BUS"))
+				.thenReturn(Optional.of(provider(1L, "NATIONAL_PRECISION_BUS")));
+		when(transitProviderMapper.findByCode("GBIS"))
+				.thenReturn(Optional.of(provider(2L, "GBIS")));
+		when(transitProviderService.getClient(ExternalApiProvider.GBIS)).thenReturn(client);
+		when(client.searchLines("033", 20)).thenReturn(List.of(gbisGoyang033, gbisPaju033));
+		when(transitLineMapper.findActiveLinesByProviderLineIds(
+				1L, List.of("TAGO:31100:1")))
+				.thenReturn(List.of(persistedNational033));
+		when(transitLineMapper.findActiveLinesByProviderLineIds(
+				2L, List.of("241439006")))
+				.thenReturn(List.of(persistedPaju033));
+
+		assertThat(collectionService.searchAndSynchronizeNearbyBusLines(
+				"033", 20, new java.math.BigDecimal("37.7599"), new java.math.BigDecimal("126.7800")))
+				.containsExactly(persistedPaju033)
+				.doesNotContain(persistedNational033);
 	}
 
 	@Test
@@ -179,5 +238,40 @@ class TransitExternalCollectionServiceImplTest {
 				.transportType("SUBWAY")
 				.build()));
 		when(transitProviderService.getClient(ExternalApiProvider.SEOUL_SUBWAY)).thenReturn(client);
+	}
+
+	private static TransitProviderEntity provider(long id, String code) {
+		return TransitProviderEntity.builder()
+				.id(id)
+				.code(code)
+				.transportType("BUS")
+				.build();
+	}
+
+	private static ExternalTransitLine externalLine(
+			String providerLineId,
+			String publicName,
+			String operatorName) {
+		return ExternalTransitLine.builder()
+				.providerLineId(providerLineId)
+				.publicName(publicName)
+				.operatorName(operatorName)
+				.sourceUpdatedAt(NOW)
+				.build();
+	}
+
+	private static TransitLineEntity persistedLine(
+			long providerId,
+			String providerLineId,
+			String publicName,
+			String operatorName) {
+		return TransitLineEntity.builder()
+				.id(UUID.randomUUID())
+				.providerId(providerId)
+				.providerLineId(providerLineId)
+				.publicName(publicName)
+				.operatorName(operatorName)
+				.active(true)
+				.build();
 	}
 }

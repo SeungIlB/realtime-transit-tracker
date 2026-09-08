@@ -28,6 +28,7 @@ import com.realtimetransit.backend.provider.client.dto.ExternalDirection;
 import com.realtimetransit.backend.provider.client.dto.ExternalRouteReference;
 import com.realtimetransit.backend.provider.client.dto.ExternalStop;
 import com.realtimetransit.backend.provider.client.dto.ExternalTransitLine;
+import com.realtimetransit.backend.provider.nationalbus.dto.NationalBusLineSearchResult;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -74,7 +75,19 @@ public class NationalBusClient extends ProviderClientSupport implements TransitP
 			int limit,
 			BigDecimal latitude,
 			BigDecimal longitude) {
-		if (latitude == null || longitude == null) return searchLines(query, limit);
+		return searchNearbyLines(query, limit, latitude, longitude).getLines();
+	}
+
+	public NationalBusLineSearchResult searchNearbyLines(
+			String query,
+			int limit,
+			BigDecimal latitude,
+			BigDecimal longitude) {
+		if (latitude == null || longitude == null) {
+			throw new BusinessException(
+					ErrorCode.INVALID_REQUEST,
+					"latitude and longitude are required for nationwide bus search");
+		}
 		String normalizedQuery = query.strip().toLowerCase(Locale.ROOT);
 		List<String> cityCodes = referenceClient.findNearbyStops(latitude, longitude).stream()
 				.map(item -> text(item, "citycode"))
@@ -89,10 +102,26 @@ public class NationalBusClient extends ProviderClientSupport implements TransitP
 				if (routeNo == null || !routeNo.toLowerCase(Locale.ROOT).contains(normalizedQuery)) continue;
 				ExternalTransitLine line = toLine(cityCode, item);
 				lines.putIfAbsent(line.getProviderLineId(), line);
-				if (lines.size() >= limit) return List.copyOf(lines.values());
+				if (lines.size() >= limit) return nationalSearchResult(lines, cityCodes);
 			}
 		}
-		return List.copyOf(lines.values());
+		return nationalSearchResult(lines, cityCodes);
+	}
+
+	private NationalBusLineSearchResult nationalSearchResult(
+			Map<String, ExternalTransitLine> lines,
+			List<String> cityCodes) {
+		List<String> nearbyGyeonggiRegionNames = cityCodes.stream().noneMatch(cityCode -> cityCode.startsWith("31"))
+				? List.of()
+				: referenceClient.findCityCodes().stream()
+						.filter(item -> cityCodes.contains(text(item, "citycode")))
+						.map(item -> text(item, "cityname"))
+						.filter(Objects::nonNull)
+						.toList();
+		return NationalBusLineSearchResult.builder()
+				.lines(List.copyOf(lines.values()))
+				.nearbyGyeonggiRegionNames(nearbyGyeonggiRegionNames)
+				.build();
 	}
 
 	@Override
