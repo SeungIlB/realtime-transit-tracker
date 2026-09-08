@@ -23,6 +23,7 @@ import com.realtimetransit.backend.common.error.BusinessException;
 import com.realtimetransit.backend.common.error.ErrorCode;
 import com.realtimetransit.backend.common.quota.ExternalApiProvider;
 import com.realtimetransit.backend.provider.client.TransitProviderClient;
+import com.realtimetransit.backend.provider.client.TransitRouteProximity;
 import com.realtimetransit.backend.provider.client.dto.ExternalArrival;
 import com.realtimetransit.backend.provider.client.dto.ExternalDirection;
 import com.realtimetransit.backend.provider.client.dto.ExternalStop;
@@ -60,6 +61,8 @@ import lombok.RequiredArgsConstructor;
 public class TransitExternalCollectionServiceImpl implements TransitExternalCollectionService {
 	private static final ZoneId KOREA_ZONE = ZoneId.of("Asia/Seoul");
 	private static final Duration ARRIVAL_CLOCK_SKEW_TOLERANCE = Duration.ofSeconds(5);
+	private static final double NEARBY_ROUTE_RADIUS_METERS = 1_000.0;
+	private static final int MAX_GBIS_PROXIMITY_CHECKS = 10;
 	private final TransitProviderService transitProviderService;
 	private final NationalBusClient nationalBusClient;
 	private final TransitProviderMapper transitProviderMapper;
@@ -94,7 +97,7 @@ public class TransitExternalCollectionServiceImpl implements TransitExternalColl
 	@Override
 	@Cacheable(
 			cacheNames = TransitCacheNames.TRANSIT_STATIC_DATA,
-			key = "'NEARBY_BUS_LINES:v2:' + #query + ':' + #limit + ':'"
+			key = "'NEARBY_BUS_LINES:v3:' + #query + ':' + #limit + ':'"
 					+ " + #latitude.setScale(3, T(java.math.RoundingMode).HALF_UP).toPlainString() + ':'"
 					+ " + #longitude.setScale(3, T(java.math.RoundingMode).HALF_UP).toPlainString()")
 	public List<TransitLineEntity> searchAndSynchronizeNearbyBusLines(
@@ -105,10 +108,17 @@ public class TransitExternalCollectionServiceImpl implements TransitExternalColl
 		var nationalResult = nationalBusClient.searchNearbyLines(query, limit, latitude, longitude);
 		List<TransitLineEntity> nationalLines = synchronizeAndLoadLines(
 				"NATIONAL_PRECISION_BUS", nationalResult.getLines());
-		if (nationalResult.getNearbyGyeonggiRegionNames().isEmpty()) return nationalLines;
+		if (nationalResult.getNearbyCityCodes().stream().noneMatch(
+				TransitExternalCollectionServiceImpl::isCapitalAreaCityCode)) return nationalLines;
 
-		List<ExternalTransitLine> nearbyGbisExternalLines = client("GBIS").searchLines(query, limit).stream()
-				.filter(line -> servesAnyRegion(line, nationalResult.getNearbyGyeonggiRegionNames()))
+		TransitProviderClient gbisClient = client("GBIS");
+		List<ExternalTransitLine> nearbyGbisExternalLines = gbisClient.searchLines(query, limit).stream()
+				.limit(MAX_GBIS_PROXIMITY_CHECKS)
+				.filter(line -> TransitRouteProximity.servesLocation(
+						gbisClient.fetchRoute(line.getProviderLineId()),
+						latitude,
+						longitude,
+						NEARBY_ROUTE_RADIUS_METERS))
 				.toList();
 		List<TransitLineEntity> gbisLines = synchronizeAndLoadLines("GBIS", nearbyGbisExternalLines);
 		Set<String> gbisRouteNames = gbisLines.stream()
@@ -140,17 +150,8 @@ public class TransitExternalCollectionServiceImpl implements TransitExternalColl
 		return transitLineMapper.findActiveLinesByProviderLineIds(provider.getId(), providerLineIds);
 	}
 
-	private static boolean servesAnyRegion(ExternalTransitLine line, List<String> regionNames) {
-		if (line.getOperatorName() == null) return false;
-		String operatorRegion = line.getOperatorName().replace(" ", "").toLowerCase(Locale.ROOT);
-		return regionNames.stream()
-				.map(TransitExternalCollectionServiceImpl::normalizeRegionName)
-				.anyMatch(operatorRegion::contains);
-	}
-
-	private static String normalizeRegionName(String regionName) {
-		String normalized = regionName.replace(" ", "").toLowerCase(Locale.ROOT);
-		return normalized.replaceFirst("[시군]$", "");
+	private static boolean isCapitalAreaCityCode(String cityCode) {
+		return cityCode.startsWith("11") || cityCode.startsWith("23") || cityCode.startsWith("31");
 	}
 
 	@Override

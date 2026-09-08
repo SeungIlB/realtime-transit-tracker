@@ -588,12 +588,16 @@ export function TransitJourneyPage() {
   }
 
   const locationTitle = location
-    ? nearestStop ? `${nearestStop.stopName} 인근` : locationLabel ?? '현재 위치'
+    ? location.source === 'search' && locationLabel
+      ? locationLabel
+      : nearestStop ? `${nearestStop.stopName} 인근` : locationLabel ?? '현재 위치'
     : locationStatus === 'loading' ? '현재 위치를 찾고 있어요' : '출발 위치를 알려주세요'
   const locationDetail = location
-    ? nearestStop
-      ? `${nearestStop.stopName}까지 ${formatDistance(distanceMeters(location, nearestStop))} · ${location.source === 'search' ? '검색 위치 기준' : `정확도 약 ${Math.round(location.accuracyM)}m`}`
-      : location.source === 'search' ? '검색한 장소를 출발점으로 사용해요.' : `위치 정확도 약 ${Math.round(location.accuracyM)}m`
+    ? location.source === 'search'
+      ? '검색한 장소를 출발점으로 사용해요.'
+      : nearestStop
+        ? `${nearestStop.stopName}까지 ${formatDistance(distanceMeters(location, nearestStop))} · 정확도 약 ${Math.round(location.accuracyM)}m`
+        : `위치 정확도 약 ${Math.round(location.accuracyM)}m`
     : '현재 위치를 쓰거나 장소를 직접 검색할 수 있어요.'
 
   return (

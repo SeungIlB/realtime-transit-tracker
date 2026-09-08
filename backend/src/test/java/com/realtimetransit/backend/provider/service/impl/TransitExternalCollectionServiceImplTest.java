@@ -14,6 +14,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -103,13 +104,13 @@ class TransitExternalCollectionServiceImplTest {
 	}
 
 	@Test
-	void doesNotSearchGbisOutsideGyeonggi() {
+	void doesNotSearchGbisOutsideCapitalArea() {
 		var nationalExternalLine = externalLine("TAGO:34030:1", "101", "대천역 순환");
 		var nationalLine = persistedLine(1L, "TAGO:34030:1", "101", "대천역 순환");
 		when(nationalBusClient.searchNearbyLines(any(), anyInt(), any(), any()))
 				.thenReturn(NationalBusLineSearchResult.builder()
 						.lines(List.of(nationalExternalLine))
-						.nearbyGyeonggiRegionNames(List.of())
+						.nearbyCityCodes(List.of("34030"))
 						.build());
 		when(transitProviderMapper.findByCode("NATIONAL_PRECISION_BUS"))
 				.thenReturn(Optional.of(provider(1L, "NATIONAL_PRECISION_BUS")));
@@ -133,7 +134,7 @@ class TransitExternalCollectionServiceImplTest {
 		when(nationalBusClient.searchNearbyLines(any(), anyInt(), any(), any()))
 				.thenReturn(NationalBusLineSearchResult.builder()
 						.lines(List.of(national033))
-						.nearbyGyeonggiRegionNames(List.of("파주시"))
+						.nearbyCityCodes(List.of("31200"))
 						.build());
 		when(transitProviderMapper.findByCode("NATIONAL_PRECISION_BUS"))
 				.thenReturn(Optional.of(provider(1L, "NATIONAL_PRECISION_BUS")));
@@ -141,6 +142,8 @@ class TransitExternalCollectionServiceImplTest {
 				.thenReturn(Optional.of(provider(2L, "GBIS")));
 		when(transitProviderService.getClient(ExternalApiProvider.GBIS)).thenReturn(client);
 		when(client.searchLines("033", 20)).thenReturn(List.of(gbisGoyang033, gbisPaju033));
+		when(client.fetchRoute("241328006")).thenReturn(routeAt("241328006", "37.6500", "126.8300"));
+		when(client.fetchRoute("241439006")).thenReturn(routeAt("241439006", "37.7598", "126.7801"));
 		when(transitLineMapper.findActiveLinesByProviderLineIds(
 				1L, List.of("TAGO:31100:1")))
 				.thenReturn(List.of(persistedNational033));
@@ -152,6 +155,28 @@ class TransitExternalCollectionServiceImplTest {
 				"033", 20, new java.math.BigDecimal("37.7599"), new java.math.BigDecimal("126.7800")))
 				.containsExactly(persistedPaju033)
 				.doesNotContain(persistedNational033);
+	}
+
+	@Test
+	void findsGbisRouteThatActuallyPassesNearSeoulLocation() {
+		var gbis6601 = externalLine("232000137", "6601", "김포,서울");
+		var persisted6601 = persistedLine(2L, "232000137", "6601", "김포,서울");
+		when(nationalBusClient.searchNearbyLines(any(), anyInt(), any(), any()))
+				.thenReturn(NationalBusLineSearchResult.builder()
+						.lines(List.of())
+						.nearbyCityCodes(List.of("23"))
+						.build());
+		when(transitProviderMapper.findByCode("GBIS"))
+				.thenReturn(Optional.of(provider(2L, "GBIS")));
+		when(transitProviderService.getClient(ExternalApiProvider.GBIS)).thenReturn(client);
+		when(client.searchLines("6601", 20)).thenReturn(List.of(gbis6601));
+		when(client.fetchRoute("232000137")).thenReturn(routeAt("232000137", "37.536367", "126.903383"));
+		when(transitLineMapper.findActiveLinesByProviderLineIds(2L, List.of("232000137")))
+				.thenReturn(List.of(persisted6601));
+
+		assertThat(collectionService.searchAndSynchronizeNearbyBusLines(
+				"6601", 20, new BigDecimal("37.5340"), new BigDecimal("126.9020")))
+				.containsExactly(persisted6601);
 	}
 
 	@Test
@@ -272,6 +297,20 @@ class TransitExternalCollectionServiceImplTest {
 				.publicName(publicName)
 				.operatorName(operatorName)
 				.active(true)
+				.build();
+	}
+
+	private static ExternalRouteReference routeAt(String providerLineId, String latitude, String longitude) {
+		return ExternalRouteReference.builder()
+				.providerLineId(providerLineId)
+				.directions(List.of(ExternalDirection.builder()
+						.providerDirectionId("OUTBOUND")
+						.stops(List.of(ExternalStop.builder()
+								.providerStopId("stop")
+								.latitude(new BigDecimal(latitude))
+								.longitude(new BigDecimal(longitude))
+								.build()))
+						.build()))
 				.build();
 	}
 }

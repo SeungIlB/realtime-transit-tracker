@@ -17,5 +17,5 @@ import lombok.Setter;
 @AllArgsConstructor
 public class NationalBusLineSearchResult {
 	private List<ExternalTransitLine> lines;
-	private List<String> nearbyGyeonggiRegionNames;
+	private List<String> nearbyCityCodes;
 }

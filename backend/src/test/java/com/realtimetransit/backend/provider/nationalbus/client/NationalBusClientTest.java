@@ -10,7 +10,6 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
-import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
@@ -33,7 +32,10 @@ class NationalBusClientTest {
 				objectMapper.readTree("""
 						{"routeid":"GGB229000006","routeno":"033","startnodenm":"금촌","endnodenm":"탄현"}
 						""")));
-		when(referenceClient.findCityNamesByCode()).thenReturn(Map.of("31200", "파주시"));
+		when(referenceClient.findRouteStops("31200", "GGB229000006")).thenReturn(List.of(
+				objectMapper.readTree("""
+						{"nodeid":"nearby","nodenm":"금촌역","nodeord":1,"gpslati":37.7598,"gpslong":126.7801}
+						""")));
 		NationalBusClient client = new NationalBusClient(
 				mock(ExternalApiQuotaService.class),
 				referenceClient,
@@ -42,13 +44,37 @@ class NationalBusClientTest {
 		var result = client.searchNearbyLines(
 				"033", 20, new BigDecimal("37.7599"), new BigDecimal("126.7800"));
 
-		assertThat(result.getNearbyGyeonggiRegionNames()).containsExactly("파주시");
+		assertThat(result.getNearbyCityCodes()).containsExactly("31200");
 		assertThat(result.getLines())
 				.singleElement()
 				.satisfies(line -> {
 					assertThat(line.getPublicName()).isEqualTo("033");
 					assertThat(line.getProviderLineId()).isEqualTo("TAGO:31200:GGB229000006");
 				});
+	}
+
+	@Test
+	void excludesSameNumberRouteThatDoesNotPassNearCurrentLocation() {
+		NationalBusReferenceClient referenceClient = mock(NationalBusReferenceClient.class);
+		when(referenceClient.findNearbyCityCodes(any(BigDecimal.class), any(BigDecimal.class)))
+				.thenReturn(List.of("23"));
+		when(referenceClient.findRoutes("23", "6601")).thenReturn(List.of(
+				objectMapper.readTree("""
+						{"routeid":"ICB166000023","routeno":"6601","startnodenm":"갈산","endnodenm":"뫼골"}
+						""")));
+		when(referenceClient.findRouteStops("23", "ICB166000023")).thenReturn(List.of(
+				objectMapper.readTree("""
+						{"nodeid":"far","nodenm":"인천정류장","nodeord":1,"gpslati":37.5000,"gpslong":126.7200}
+						""")));
+		NationalBusClient client = new NationalBusClient(
+				mock(ExternalApiQuotaService.class),
+				referenceClient,
+				Clock.fixed(Instant.parse("2026-09-08T00:00:00Z"), ZoneOffset.UTC));
+
+		var result = client.searchNearbyLines(
+				"6601", 20, new BigDecimal("37.5340"), new BigDecimal("126.9020"));
+
+		assertThat(result.getLines()).isEmpty();
 	}
 
 	@Test

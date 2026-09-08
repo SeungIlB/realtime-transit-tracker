@@ -25,6 +25,7 @@ import com.realtimetransit.backend.common.quota.ExternalApiQuotaService;
 import com.realtimetransit.backend.provider.client.ProviderClientSupport;
 import com.realtimetransit.backend.provider.client.TransitProviderClient;
 import com.realtimetransit.backend.provider.client.TransitProviderProperties;
+import com.realtimetransit.backend.provider.client.TransitRouteProximity;
 import com.realtimetransit.backend.provider.client.dto.ExternalArrival;
 import com.realtimetransit.backend.provider.client.dto.ExternalDirection;
 import com.realtimetransit.backend.provider.client.dto.ExternalRouteReference;
@@ -42,6 +43,7 @@ public class NationalBusClient extends ProviderClientSupport implements TransitP
 
 	private static final String ID_PREFIX = "TAGO:";
 	private static final int MAX_NEARBY_CITIES = 3;
+	private static final double NEARBY_ROUTE_RADIUS_METERS = 1_000.0;
 	private static final Duration ROUTE_CACHE_TTL = Duration.ofHours(24);
 	private static final Duration ARRIVAL_CACHE_TTL = Duration.ofSeconds(15);
 
@@ -82,7 +84,7 @@ public class NationalBusClient extends ProviderClientSupport implements TransitP
 
 	@Cacheable(
 			cacheNames = TransitCacheNames.TRANSIT_STATIC_DATA,
-			key = "'TAGO:nearby-lines:v3:' + #query + ':' + #limit + ':'"
+			key = "'TAGO:nearby-lines:v4:' + #query + ':' + #limit + ':'"
 					+ " + #latitude.setScale(3, T(java.math.RoundingMode).HALF_UP).toPlainString() + ':'"
 					+ " + #longitude.setScale(3, T(java.math.RoundingMode).HALF_UP).toPlainString()")
 	public NationalBusLineSearchResult searchNearbyLines(
@@ -105,6 +107,8 @@ public class NationalBusClient extends ProviderClientSupport implements TransitP
 				String routeNo = text(item, "routeno");
 				if (routeNo == null || !routeNo.toLowerCase(Locale.ROOT).contains(normalizedQuery)) continue;
 				ExternalTransitLine line = toLine(cityCode, item);
+				if (!TransitRouteProximity.servesLocation(
+						fetchRoute(line.getProviderLineId()), latitude, longitude, NEARBY_ROUTE_RADIUS_METERS)) continue;
 				lines.putIfAbsent(line.getProviderLineId(), line);
 				if (lines.size() >= limit) return nationalSearchResult(lines, cityCodes);
 			}
@@ -115,15 +119,9 @@ public class NationalBusClient extends ProviderClientSupport implements TransitP
 	private NationalBusLineSearchResult nationalSearchResult(
 			Map<String, ExternalTransitLine> lines,
 			List<String> cityCodes) {
-		List<String> nearbyGyeonggiRegionNames = cityCodes.stream().noneMatch(cityCode -> cityCode.startsWith("31"))
-				? List.of()
-				: cityCodes.stream()
-						.map(referenceClient.findCityNamesByCode()::get)
-						.filter(Objects::nonNull)
-						.toList();
 		return NationalBusLineSearchResult.builder()
 				.lines(List.copyOf(lines.values()))
-				.nearbyGyeonggiRegionNames(nearbyGyeonggiRegionNames)
+				.nearbyCityCodes(cityCodes)
 				.build();
 	}
 

@@ -2,9 +2,7 @@ package com.realtimetransit.backend.provider.nationalbus.client;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 
 import org.springframework.cache.annotation.Cacheable;
@@ -70,17 +68,9 @@ public class NationalBusReferenceClient extends ProviderClientSupport {
 				List.of(parameter("cityCode", cityCode), parameter("routeNo", routeNo)));
 	}
 
-	@Cacheable(cacheNames = TransitCacheNames.TRANSIT_STATIC_DATA, key = "'TAGO:city-names:v2'")
-	public Map<String, String> findCityNamesByCode() {
-		Map<String, String> namesByCode = new LinkedHashMap<>();
-		for (JsonNode item : fetchAll(ROUTE_SERVICE, "/getCtyCodeList", List.of())) {
-			String cityCode = text(item, "citycode");
-			String cityName = text(item, "cityname");
-			if (cityCode != null && cityName != null) namesByCode.put(cityCode, cityName);
-		}
-		return Map.copyOf(namesByCode);
-	}
-
+	@Cacheable(
+			cacheNames = TransitCacheNames.TRANSIT_STATIC_DATA,
+			key = "'TAGO:route-stops:v1:' + #cityCode + ':' + #routeId")
 	public List<JsonNode> findRouteStops(String cityCode, String routeId) {
 		return fetchAll(
 				ROUTE_SERVICE,
