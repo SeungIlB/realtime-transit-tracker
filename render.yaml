@@ -7,6 +7,10 @@ services:
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
     healthCheckPath: /actuator/health
+    buildFilter:
+      paths:
+        - backend/**
+        - render.yaml
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: production
