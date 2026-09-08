@@ -1,5 +1,8 @@
 package com.realtimetransit.backend.provider.client;
 
+import java.net.http.HttpClient;
+import java.time.Duration;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
@@ -9,8 +12,11 @@ import org.springframework.web.client.RestClient;
 public class TransitHttpClientConfig {
 	@Bean
 	RestClient.Builder transitRestClientBuilder() {
-		JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory();
-		requestFactory.setReadTimeout(java.time.Duration.ofSeconds(10));
+		HttpClient httpClient = HttpClient.newBuilder()
+				.connectTimeout(Duration.ofSeconds(3))
+				.build();
+		JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
+		requestFactory.setReadTimeout(Duration.ofSeconds(7));
 		return RestClient.builder().requestFactory(requestFactory);
 	}
 }

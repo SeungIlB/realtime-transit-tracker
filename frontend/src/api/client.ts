@@ -65,6 +65,33 @@ export async function requestApi<T>(path: string, init: RequestInit = {}): Promi
   return body.data
 }
 
-export function fetchApi<T>(path: string, signal?: AbortSignal): Promise<T> {
-  return requestApi<T>(path, { signal })
+export async function fetchApi<T>(path: string, signal?: AbortSignal, timeoutMs?: number): Promise<T> {
+  if (!timeoutMs) {
+    return requestApi<T>(path, { signal })
+  }
+
+  const controller = new AbortController()
+  let timedOut = false
+  const abortFromCaller = () => controller.abort(signal?.reason)
+  if (signal?.aborted) {
+    abortFromCaller()
+  } else {
+    signal?.addEventListener('abort', abortFromCaller, { once: true })
+  }
+  const timeoutId = window.setTimeout(() => {
+    timedOut = true
+    controller.abort()
+  }, timeoutMs)
+
+  try {
+    return await requestApi<T>(path, { signal: controller.signal })
+  } catch (error) {
+    if (timedOut) {
+      throw new ApiError('REQUEST_TIMEOUT', '요청 시간이 초과되었습니다.', 408)
+    }
+    throw error
+  } finally {
+    window.clearTimeout(timeoutId)
+    signal?.removeEventListener('abort', abortFromCaller)
+  }
 }

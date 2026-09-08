@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { requestApi, resolveApiUrl } from './client'
+import { fetchApi, requestApi, resolveApiUrl } from './client'
 
 describe('resolveApiUrl', () => {
   it('uses the relative path during local development', () => {
@@ -15,6 +15,7 @@ describe('resolveApiUrl', () => {
 
 describe('requestApi', () => {
   afterEach(() => {
+    vi.useRealTimers()
     vi.unstubAllGlobals()
   })
 
@@ -39,5 +40,22 @@ describe('requestApi', () => {
       code: 'EMPTY_API_RESPONSE',
       status: 503,
     })
+  })
+
+  it('aborts and returns a typed error when the request timeout is exceeded', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('fetch', vi.fn((_url: string | URL | Request, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))
+    })))
+
+    const request = fetchApi('/api/test', undefined, 100)
+    const expectation = expect(request).rejects.toMatchObject({
+      name: 'ApiError',
+      code: 'REQUEST_TIMEOUT',
+      status: 408,
+    })
+    await vi.advanceTimersByTimeAsync(100)
+
+    await expectation
   })
 })

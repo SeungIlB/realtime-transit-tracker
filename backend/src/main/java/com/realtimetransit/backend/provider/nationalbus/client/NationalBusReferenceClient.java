@@ -32,7 +32,7 @@ public class NationalBusReferenceClient extends ProviderClientSupport {
 	private static final String ROUTE_SERVICE = "/BusRouteInfoInqireService";
 	private static final String LOCATION_SERVICE = "/BusLcInfoInqireService";
 	private static final String ARRIVAL_SERVICE = "/ArvlInfoInqireService";
-	private static final int MAX_ATTEMPTS = 3;
+	private static final int MAX_ATTEMPTS = 2;
 
 	private final RestClient client;
 	private final String serviceKey;
@@ -49,7 +49,9 @@ public class NationalBusReferenceClient extends ProviderClientSupport {
 
 	@Cacheable(
 			cacheNames = TransitCacheNames.TRANSIT_STATIC_DATA,
-			key = "'TAGO:nearby-cities:v2:' + #latitude.toPlainString() + ':' + #longitude.toPlainString()")
+			key = "'TAGO:nearby-cities:v3:'"
+					+ " + #latitude.setScale(3, T(java.math.RoundingMode).HALF_UP).toPlainString() + ':'"
+					+ " + #longitude.setScale(3, T(java.math.RoundingMode).HALF_UP).toPlainString()")
 	public List<String> findNearbyCityCodes(BigDecimal latitude, BigDecimal longitude) {
 		return fetchAll(
 				STOP_SERVICE,

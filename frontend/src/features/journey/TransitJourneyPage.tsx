@@ -137,6 +137,9 @@ function includesStopQuery(stop: DirectedStop | DestinationStop, query: string) 
 }
 
 function lineErrorMessage(provider: TransitProvider, error: Error | null) {
+  if (error instanceof ApiError && error.code === 'REQUEST_TIMEOUT') {
+    return '노선 검색이 지연되고 있어요. 잠시 후 다시 시도해 주세요.'
+  }
   if (provider === 'GBIS' && error instanceof ApiError && error.code === 'EXTERNAL_API_AUTHENTICATION_FAILED') {
     return '경기버스 노선정보 인증을 확인하지 못했어요. 잠시 후 다시 시도해 주세요.'
   }
@@ -387,6 +390,7 @@ export function TransitJourneyPage() {
     queryKey: ['transit-lines', provider, submittedQuery, submittedLineLocation?.latitude, submittedLineLocation?.longitude],
     queryFn: ({ signal }) => searchTransitLines(provider, submittedQuery, submittedLineLocation, signal),
     enabled: submittedQuery.length > 0 && (provider !== 'NATIONAL_PRECISION_BUS' || submittedLineLocation !== null),
+    retry: false,
   })
   const stopQuery = useQuery({ queryKey: ['directed-stops', selectedLine?.id], queryFn: ({ signal }) => fetchDirectedStops(selectedLine!.id, signal), enabled: selectedLine !== null })
   const destinationQuery = useQuery({ queryKey: ['destination-stops', selectedLine?.id, boardingStop?.directionId, boardingStop?.stopId], queryFn: ({ signal }) => fetchDestinationStops(selectedLine!.id, boardingStop!.directionId, boardingStop!.stopId, signal), enabled: selectedLine !== null && boardingStop !== null })

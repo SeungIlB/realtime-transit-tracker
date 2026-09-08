@@ -94,8 +94,9 @@ public class TransitExternalCollectionServiceImpl implements TransitExternalColl
 	@Override
 	@Cacheable(
 			cacheNames = TransitCacheNames.TRANSIT_STATIC_DATA,
-			key = "'NEARBY_BUS_LINES:v1:' + #query + ':' + #limit + ':'"
-					+ " + #latitude.toPlainString() + ':' + #longitude.toPlainString()")
+			key = "'NEARBY_BUS_LINES:v2:' + #query + ':' + #limit + ':'"
+					+ " + #latitude.setScale(3, T(java.math.RoundingMode).HALF_UP).toPlainString() + ':'"
+					+ " + #longitude.setScale(3, T(java.math.RoundingMode).HALF_UP).toPlainString()")
 	public List<TransitLineEntity> searchAndSynchronizeNearbyBusLines(
 			String query,
 			int limit,

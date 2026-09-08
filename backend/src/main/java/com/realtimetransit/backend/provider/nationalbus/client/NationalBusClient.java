@@ -82,8 +82,9 @@ public class NationalBusClient extends ProviderClientSupport implements TransitP
 
 	@Cacheable(
 			cacheNames = TransitCacheNames.TRANSIT_STATIC_DATA,
-			key = "'TAGO:nearby-lines:v2:' + #query + ':' + #limit + ':'"
-					+ " + #latitude.toPlainString() + ':' + #longitude.toPlainString()")
+			key = "'TAGO:nearby-lines:v3:' + #query + ':' + #limit + ':'"
+					+ " + #latitude.setScale(3, T(java.math.RoundingMode).HALF_UP).toPlainString() + ':'"
+					+ " + #longitude.setScale(3, T(java.math.RoundingMode).HALF_UP).toPlainString()")
 	public NationalBusLineSearchResult searchNearbyLines(
 			String query,
 			int limit,

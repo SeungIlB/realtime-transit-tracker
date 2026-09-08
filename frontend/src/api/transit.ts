@@ -51,6 +51,8 @@ export type UpcomingArrival = {
   receivedAt: string
 }
 
+const LINE_SEARCH_TIMEOUT_MS = 25_000
+
 export function searchTransitLines(
   provider: TransitProvider,
   query: string,
@@ -62,7 +64,7 @@ export function searchTransitLines(
     params.set('latitude', String(location.latitude))
     params.set('longitude', String(location.longitude))
   }
-  return fetchApi<TransitLine[]>(`/api/v1/lines?${params}`, signal)
+  return fetchApi<TransitLine[]>(`/api/v1/lines?${params}`, signal, LINE_SEARCH_TIMEOUT_MS)
 }
 
 export function fetchDirectedStops(lineId: string, signal?: AbortSignal) {
