@@ -34,8 +34,6 @@ public class TransitLineServiceImpl implements TransitLineService {
 			BigDecimal longitude) {
 		validateSearchInput(providerCode, query);
 		String normalizedQuery = query.strip();
-		var provider = transitProviderMapper.findByCode(providerCode)
-				.orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Provider: " + providerCode));
 		int safeLimit = Math.clamp(limit, 1, MAX_SEARCH_LIMIT);
 		if ("NATIONAL_PRECISION_BUS".equals(providerCode)) {
 			validateLocation(latitude, longitude);
@@ -44,6 +42,8 @@ public class TransitLineServiceImpl implements TransitLineService {
 					.map(TransitLineResponse::from)
 					.toList();
 		}
+		var provider = transitProviderMapper.findByCode(providerCode)
+				.orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Provider: " + providerCode));
 		var lines = transitLineMapper.searchActiveLines(provider.getId(), normalizedQuery, safeLimit);
 		if (lines.isEmpty()) {
 			externalCollectionService.searchAndSynchronizeLines(

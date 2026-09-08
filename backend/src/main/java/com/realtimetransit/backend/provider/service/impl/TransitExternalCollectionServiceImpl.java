@@ -16,7 +16,9 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
+import org.springframework.cache.annotation.Cacheable;
 
+import com.realtimetransit.backend.common.cache.TransitCacheNames;
 import com.realtimetransit.backend.common.error.BusinessException;
 import com.realtimetransit.backend.common.error.ErrorCode;
 import com.realtimetransit.backend.common.quota.ExternalApiProvider;
@@ -90,6 +92,10 @@ public class TransitExternalCollectionServiceImpl implements TransitExternalColl
 	}
 
 	@Override
+	@Cacheable(
+			cacheNames = TransitCacheNames.TRANSIT_STATIC_DATA,
+			key = "'NEARBY_BUS_LINES:v1:' + #query + ':' + #limit + ':'"
+					+ " + #latitude.toPlainString() + ':' + #longitude.toPlainString()")
 	public List<TransitLineEntity> searchAndSynchronizeNearbyBusLines(
 			String query,
 			int limit,

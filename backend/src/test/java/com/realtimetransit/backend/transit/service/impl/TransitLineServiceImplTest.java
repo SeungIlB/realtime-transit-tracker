@@ -68,11 +68,9 @@ class TransitLineServiceImplTest {
 
 	@Test
 	void synchronizesAndReturnsOnlyLocationScopedNationwideBusLines() {
-		TransitProviderEntity provider = provider("NATIONAL_PRECISION_BUS");
-		TransitLineEntity line = line(provider.getId(), "101");
+		TransitLineEntity line = line(1L, "101");
 		BigDecimal latitude = new BigDecimal("36.341858");
 		BigDecimal longitude = new BigDecimal("126.586988");
-		when(transitProviderMapper.findByCode("NATIONAL_PRECISION_BUS")).thenReturn(Optional.of(provider));
 		when(externalCollectionService.searchAndSynchronizeNearbyBusLines(
 				"101", 20, latitude, longitude))
 				.thenReturn(List.of(line));
@@ -81,14 +79,11 @@ class TransitLineServiceImplTest {
 				"NATIONAL_PRECISION_BUS", "101", 20, latitude, longitude))
 				.singleElement()
 				.satisfies(response -> assertThat(response.getPublicName()).isEqualTo("101"));
-		verify(transitLineMapper, never()).searchActiveLines(provider.getId(), "101", 20);
+		verifyNoInteractions(transitLineMapper);
 	}
 
 	@Test
 	void requiresLocationForNationwideBusSearch() {
-		TransitProviderEntity provider = provider("NATIONAL_PRECISION_BUS");
-		when(transitProviderMapper.findByCode("NATIONAL_PRECISION_BUS")).thenReturn(Optional.of(provider));
-
 		assertInvalidRequest(() -> transitLineService.searchActiveLines(
 				"NATIONAL_PRECISION_BUS", "101", 20, null, null));
 	}
