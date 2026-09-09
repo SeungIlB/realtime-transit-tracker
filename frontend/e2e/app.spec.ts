@@ -7,7 +7,8 @@ const success = (data: unknown) => ({
   data,
 })
 
-test('creates a journey and shows the boarding decision', async ({ context, page }) => {
+test('creates a journey and shows the boarding decision', async ({ context, page }, testInfo) => {
+  const isMobile = testInfo.project.name === 'mobile-chromium'
   await context.grantPermissions(['geolocation'])
   await context.setGeolocation({ latitude: 37.1, longitude: 127.1, accuracy: 12 })
 
@@ -17,6 +18,7 @@ test('creates a journey and shows the boarding decision', async ({ context, page
   const travelerAt = new Date(now + 4 * 60_000).toISOString()
   let locationRequestCount = 0
   let decisionRequestCount = 0
+  let journeyRequestCount = 0
 
   await page.route('**/api/v1/**', async (route) => {
     const request = route.request()
@@ -25,8 +27,8 @@ test('creates a journey and shows the boarding decision', async ({ context, page
 
     if (url.pathname === '/api/v1/system/health') {
       body = { status: 'UP', checkedAt: new Date().toISOString() }
-    } else if (url.pathname === '/api/v1/lines') {
-      expect(url.searchParams.get('provider')).toBe('GBIS')
+    } else if (url.pathname === '/api/v1/lines/search') {
+      expect(request.postDataJSON()).toMatchObject({ provider: 'GBIS', query: '6601', limit: 20 })
       body = [{ id: 'line-1', providerLineId: 'route-6601', publicName: '6601', operatorName: '테스트 운수', routeType: 'CITY_BUS' }]
     } else if (url.pathname === '/api/v1/lines/line-1/stops') {
       body = [
@@ -36,6 +38,7 @@ test('creates a journey and shows the boarding decision', async ({ context, page
     } else if (url.pathname.endsWith('/destinations')) {
       body = [{ directionId: 'direction-1', directionName: '강남 방면', stopId: 'stop-2', stopName: '테스트 하차 정류장', stopSequence: 2 }]
     } else if (url.pathname === '/api/v1/journeys' && request.method() === 'POST') {
+      journeyRequestCount += 1
       const payload = request.postDataJSON()
       expect(payload).toMatchObject({ lineId: 'line-1', directionId: 'direction-1', boardingStopId: 'stop-1', alightingStopId: 'stop-2', targetProbability: null })
       body = { journeyId: 'journey-1', ...payload, status: 'ACTIVE', expiresAt: new Date(now + 60 * 60_000).toISOString(), createdAt: new Date().toISOString() }
@@ -77,15 +80,33 @@ test('creates a journey and shows the boarding decision', async ({ context, page
   await page.goto('/')
 
   await expect(page.getByRole('heading', { name: '지금 나가면 탈 수 있을까요?' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '궁금한 승차 구간을 직접 선택하세요' })).toBeVisible()
+  await expect(page.getByText(/예정된 환승 지점을 출발 위치로 설정하고/)).toBeVisible()
+  if (isMobile) {
+    const pager = page.locator('.mobile-pager')
+    await pager.dispatchEvent('pointerdown', { pointerType: 'touch', clientX: 320, clientY: 300 })
+    await pager.dispatchEvent('pointerup', { pointerType: 'touch', clientX: 120, clientY: 300 })
+    await expect(page.getByRole('navigation', { name: '현재 단계: 위치' })).toBeVisible()
+    await pager.dispatchEvent('pointerdown', { pointerType: 'touch', clientX: 120, clientY: 300 })
+    await pager.dispatchEvent('pointerup', { pointerType: 'touch', clientX: 320, clientY: 300 })
+    await expect(page.getByRole('navigation', { name: '현재 단계: 안내' })).toBeVisible()
+    await page.getByRole('button', { name: '시작하기' }).click()
+  }
   await page.getByRole('button', { name: '내 위치 사용하기' }).click()
   await expect(page.getByText(/위치 정확도 약 12m/)).toBeVisible()
 
+  if (isMobile) await page.getByRole('button', { name: '노선 선택' }).click()
   await page.getByLabel('경기버스 번호').fill('6601')
   await page.getByRole('button', { name: /노선 찾기/ }).click()
   await page.getByRole('button', { name: /6601 테스트 운수/ }).click()
+  if (isMobile) await page.getByRole('button', { name: '구간 선택' }).click()
   await page.getByRole('button', { name: /테스트 승차 정류장/ }).click()
   await page.getByLabel('하차 정류장').getByRole('button', { name: /테스트 하차 정류장/ }).click()
-  await page.getByRole('button', { name: '탑승 가능성 계산' }).click()
+  const calculateButton = page.getByRole('button', { name: '탑승 가능성 계산' })
+  await calculateButton.evaluate((button) => {
+    button.click()
+    button.click()
+  })
 
   await expect(page.getByRole('heading', { name: '지금 출발하세요' })).toBeVisible()
   await expect(page.getByLabel('1번째 차량 이동 방법별 탑승 확률').getByText('92%')).toBeVisible()
@@ -93,15 +114,20 @@ test('creates a journey and shows the boarding decision', async ({ context, page
   await expect(page.getByText('경기70바1001')).toBeVisible()
   await expect(page.getByText('테스트 이전 정류장 출발')).toBeVisible()
   await expect(page.getByText(/1분마다 자동 갱신/)).toBeVisible()
+  if (isMobile) await expect(page.getByRole('navigation', { name: '현재 단계: 결과' })).toBeVisible()
 
   await context.setGeolocation({ latitude: 37.1001, longitude: 127.1001, accuracy: 10 })
   await context.setGeolocation({ latitude: 37.1002, longitude: 127.1002, accuracy: 9 })
   await page.waitForTimeout(500)
   expect(locationRequestCount).toBe(1)
   expect(decisionRequestCount).toBe(1)
+  expect(journeyRequestCount).toBe(1)
 })
 
-test('explains missing GBIS authorization on the provider screen', async ({ page }) => {
+test('explains missing GBIS authorization on the provider screen', async ({ context, page }, testInfo) => {
+  const isMobile = testInfo.project.name === 'mobile-chromium'
+  await context.grantPermissions(['geolocation'])
+  await context.setGeolocation({ latitude: 37.1, longitude: 127.1, accuracy: 12 })
   await page.route('**/api/v1/**', async (route) => {
     const url = new URL(route.request().url())
     if (url.pathname === '/api/v1/system/health') {
@@ -112,6 +138,11 @@ test('explains missing GBIS authorization on the provider screen', async ({ page
   })
 
   await page.goto('/')
+  if (isMobile) {
+    await page.getByRole('button', { name: '시작하기' }).click()
+    await page.getByRole('button', { name: '내 위치 사용하기' }).click()
+    await page.getByRole('button', { name: '노선 선택' }).click()
+  }
   await page.getByLabel('경기버스 번호').fill('6601')
   await page.getByRole('button', { name: /노선 찾기/ }).click()
 
@@ -127,10 +158,11 @@ test('explains that a sleeping backend is being prepared', async ({ page }) => {
   await page.goto('/')
 
   await expect(page.getByText('서버 준비 중')).toBeVisible({ timeout: 4_000 })
-  await expect(page.getByText('실시간 연결')).toBeVisible({ timeout: 3_000 })
+  await expect(page.getByText('실시간 연결')).toBeVisible({ timeout: 5_000 })
 })
 
-test('uses a searched place instead of raw coordinates', async ({ page }) => {
+test('uses a searched place instead of raw coordinates', async ({ page }, testInfo) => {
+  const isMobile = testInfo.project.name === 'mobile-chromium'
   await page.route('**/api/v1/system/health', async (route) => {
     await route.fulfill({ json: success({ status: 'UP', checkedAt: new Date().toISOString() }) })
   })
@@ -148,6 +180,7 @@ test('uses a searched place instead of raw coordinates', async ({ page }) => {
   })
 
   await page.goto('/')
+  if (isMobile) await page.getByRole('button', { name: '시작하기' }).click()
   await page.getByRole('button', { name: '장소 검색' }).click()
   await page.getByLabel('주소 또는 장소명').fill('용산역')
   await page.getByRole('button', { name: '위치 찾기' }).click()
@@ -157,7 +190,8 @@ test('uses a searched place instead of raw coordinates', async ({ page }) => {
   await expect(page.getByText(/검색한 장소를 출발점으로 사용해요/)).toBeVisible()
 })
 
-test('cancels a newly created journey when its initial location cannot be saved', async ({ context, page }) => {
+test('cancels a newly created journey when its initial location cannot be saved', async ({ context, page }, testInfo) => {
+  const isMobile = testInfo.project.name === 'mobile-chromium'
   await context.grantPermissions(['geolocation'])
   await context.setGeolocation({ latitude: 37.1, longitude: 127.1, accuracy: 12 })
   let cancelledJourneyId: string | null = null
@@ -169,7 +203,7 @@ test('cancels a newly created journey when its initial location cannot be saved'
       await route.fulfill({ json: success({ status: 'UP', checkedAt: new Date().toISOString() }) })
       return
     }
-    if (url.pathname === '/api/v1/lines') {
+    if (url.pathname === '/api/v1/lines/search') {
       await route.fulfill({ json: success([{ id: 'line-1', providerLineId: 'route-1', publicName: '1', operatorName: '테스트', routeType: 'CITY_BUS' }]) })
       return
     }
@@ -194,10 +228,13 @@ test('cancels a newly created journey when its initial location cannot be saved'
   })
 
   await page.goto('/')
+  if (isMobile) await page.getByRole('button', { name: '시작하기' }).click()
   await page.getByRole('button', { name: '내 위치 사용하기' }).click()
+  if (isMobile) await page.getByRole('button', { name: '노선 선택' }).click()
   await page.getByLabel('경기버스 번호').fill('1')
   await page.getByRole('button', { name: /노선 찾기/ }).click()
   await page.getByRole('button', { name: /1 테스트/ }).click()
+  if (isMobile) await page.getByRole('button', { name: '구간 선택' }).click()
   await page.getByRole('button', { name: /승차 정류장/ }).click()
   await page.getByRole('button', { name: '탑승 가능성 계산' }).click()
 

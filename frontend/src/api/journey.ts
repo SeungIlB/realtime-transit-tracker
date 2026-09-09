@@ -44,6 +44,7 @@ export type VehicleBoardingPrediction = {
   alightingStopStatus: 'STOPS' | 'SKIPS' | 'UNKNOWN' | 'NOT_REQUESTED'
   movementStatus: string | null
   currentStopName: string | null
+  destinationStopName: string | null
   currentSequence: number | null
   remainingStops: number | null
   latitude: number | null

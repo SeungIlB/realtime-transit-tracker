@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import type { CSSProperties, FormEvent } from 'react'
+import type { CSSProperties, FormEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Button, TextField } from '../../components/ui'
-import { ApiError } from '../../api/client'
+import { ApiError, getAnonymousKey } from '../../api/client'
 import { searchPlaces, type PlaceSearchResult } from '../../api/geocoding'
 import {
   addJourneyLocation,
@@ -181,15 +181,6 @@ function toLocationSnapshot(position: GeolocationPosition): LocationSnapshot {
   }
 }
 
-function getAnonymousKey() {
-  const storageKey = 'first-bus-anonymous-key'
-  const existingKey = window.localStorage.getItem(storageKey)
-  if (existingKey) return existingKey
-  const createdKey = crypto.randomUUID()
-  window.localStorage.setItem(storageKey, createdKey)
-  return createdKey
-}
-
 function QueryState({ message, action, onAction }: { message: string; action?: string; onAction?: () => void }) {
   return (
     <div className="feedback" role="status">
@@ -256,7 +247,7 @@ function VehicleCard({ vehicle, index, selected, routeStops }: { vehicle: Vehicl
         {selected ? <span className="recommendation-mark">추천 차량</span> : null}
       </header>
       <p className="vehicle-caption">
-        {formatTime(vehicle.vehicleExpectedAt)} 도착 예상 · {vehicle.providerVehicleId}
+        {formatTime(vehicle.vehicleExpectedAt)} 도착 예상 · {vehicle.destinationStopName ? `${vehicle.destinationStopName}행 · ` : ''}{vehicle.providerVehicleId}
         {serviceLabel ? <span className="service-type-badge" data-service={vehicle.serviceType}>{serviceLabel}</span> : null}
       </p>
       <div className="vehicle-position"><span aria-hidden="true" /><div><small>현재 위치</small><strong>{position.label}</strong><p>{position.detail}</p></div></div>
@@ -361,6 +352,27 @@ function DecisionPanel({ decision, routeStops, access, boardingStopName, locatio
   )
 }
 
+function MobilePageActions({
+  previousLabel,
+  nextLabel,
+  nextDisabled = false,
+  onPrevious,
+  onNext,
+}: {
+  previousLabel?: string
+  nextLabel?: string
+  nextDisabled?: boolean
+  onPrevious?: () => void
+  onNext?: () => void
+}) {
+  return (
+    <div className="mobile-page-actions" data-direction={!previousLabel ? 'next' : !nextLabel ? 'previous' : 'both'}>
+      {previousLabel && onPrevious ? <Button type="button" size="large" variant="weak" onClick={onPrevious}>{previousLabel}</Button> : <span />}
+      {nextLabel && onNext ? <Button type="button" size="large" disabled={nextDisabled} onClick={onNext}>{nextLabel}</Button> : null}
+    </div>
+  )
+}
+
 export function TransitJourneyPage() {
   const [location, setLocation] = useState<LocationSnapshot | null>(null)
   const [locationStatus, setLocationStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
@@ -382,7 +394,12 @@ export function TransitJourneyPage() {
   const [journeyState, setJourneyState] = useState<JourneyUiState>('idle')
   const [journeyError, setJourneyError] = useState<string | null>(null)
   const [healthCheckSlow, setHealthCheckSlow] = useState(false)
+  const [mobilePage, setMobilePage] = useState(0)
   const lastUploadedLocation = useRef<string | null>(null)
+  const mobileSwipeStart = useRef<{ x: number; y: number } | null>(null)
+  const locationRequestInFlight = useRef(false)
+  const journeyStartInFlight = useRef(false)
+  const cancellingJourneyIds = useRef(new Set<string>())
   const locationSource = location?.source
 
   const healthQuery = useQuery({ queryKey: ['system', 'health'], queryFn: ({ signal }) => fetchSystemHealth(signal), refetchInterval: 30_000, retry: 1 })
@@ -418,14 +435,14 @@ export function TransitJourneyPage() {
   })
 
   useEffect(() => {
-    if (locationSource !== 'browser' || !navigator.geolocation) return
+    if (!journeyId || locationSource !== 'browser' || !navigator.geolocation) return
     const watchId = navigator.geolocation.watchPosition(
       (position) => { setLocation(toLocationSnapshot(position)); setLocationStatus('ready'); setLocationError(null) },
       (error) => setLocationError(positionErrorMessage(error)),
       { enableHighAccuracy: true, maximumAge: 10_000, timeout: 20_000 },
     )
     return () => navigator.geolocation.clearWatch(watchId)
-  }, [locationSource])
+  }, [journeyId, locationSource])
 
   useEffect(() => {
     if (!healthQuery.isPending) return
@@ -458,6 +475,30 @@ export function TransitJourneyPage() {
         : `${selectedLine.publicName} · 정류장 정보를 확인하고 있어요.`
   const currentStep = !location ? 1 : !selectedLine ? 2 : !boardingStop ? 3 : 4
   const selectedBoardingAccess = boardingAccess(location, boardingStop)
+  const mobilePageLabels = ['안내', '위치', '노선', '구간', '결과']
+  const maxMobilePage = journeyState !== 'idle' || journeyId || decisionQuery.data
+    ? 4
+    : selectedLine ? 3 : location ? 2 : 1
+
+  function goToMobilePage(page: number, allowResult = false) {
+    const nextPage = Math.max(0, Math.min(allowResult ? 4 : maxMobilePage, page))
+    setMobilePage(nextPage)
+  }
+
+  function handleMobileSwipeStart(event: ReactPointerEvent<HTMLDivElement>) {
+    if (event.pointerType === 'mouse') return
+    mobileSwipeStart.current = { x: event.clientX, y: event.clientY }
+  }
+
+  function handleMobileSwipeEnd(event: ReactPointerEvent<HTMLDivElement>) {
+    const start = mobileSwipeStart.current
+    mobileSwipeStart.current = null
+    if (!start || event.pointerType === 'mouse') return
+    const horizontalDistance = event.clientX - start.x
+    const verticalDistance = event.clientY - start.y
+    if (Math.abs(horizontalDistance) < 55 || Math.abs(horizontalDistance) <= Math.abs(verticalDistance) * 1.2) return
+    goToMobilePage(mobilePage + (horizontalDistance < 0 ? 1 : -1))
+  }
 
   function endActiveJourney() {
     const activeJourneyId = journeyId
@@ -465,16 +506,21 @@ export function TransitJourneyPage() {
     setJourneyState('idle')
     setJourneyError(null)
     lastUploadedLocation.current = null
-    if (activeJourneyId) void cancelJourney(activeJourneyId)
+    if (activeJourneyId && !cancellingJourneyIds.current.has(activeJourneyId)) {
+      cancellingJourneyIds.current.add(activeJourneyId)
+      void cancelJourney(activeJourneyId).finally(() => cancellingJourneyIds.current.delete(activeJourneyId))
+    }
   }
 
   async function requestLocation() {
+    if (locationRequestInFlight.current) return
     if (!navigator.geolocation) {
       setLocationStatus('error')
       setLocationError('이 브라우저는 위치 확인을 지원하지 않아요. 주소나 장소명으로 찾아주세요.')
       setPlaceSearchOpen(true)
       return
     }
+    locationRequestInFlight.current = true
     setLocationStatus('loading')
     setLocationError(null)
     try {
@@ -486,6 +532,8 @@ export function TransitJourneyPage() {
       setLocationStatus('error')
       setLocationError(positionErrorMessage(error as GeolocationPositionError))
       setPlaceSearchOpen(true)
+    } finally {
+      locationRequestInFlight.current = false
     }
   }
 
@@ -556,10 +604,12 @@ export function TransitJourneyPage() {
   }
 
   async function startJourney() {
-    if (!location || !selectedLine || !boardingStop) return
+    if (journeyStartInFlight.current || !location || !selectedLine || !boardingStop) return
+    journeyStartInFlight.current = true
     endActiveJourney()
     setJourneyState('starting')
     setJourneyError(null)
+    goToMobilePage(4, true)
     let createdJourneyId: string | null = null
     try {
       const journey = await createJourney({
@@ -576,7 +626,9 @@ export function TransitJourneyPage() {
       lastUploadedLocation.current = location.observedAt
       setJourneyId(journey.journeyId)
       setJourneyState('tracking')
-      document.getElementById('decision-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      if (!window.matchMedia('(max-width: 760px)').matches) {
+        document.getElementById('decision-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }
     } catch (error) {
       if (createdJourneyId) {
         try {
@@ -587,6 +639,8 @@ export function TransitJourneyPage() {
       }
       setJourneyState('error')
       setJourneyError(journeyErrorMessage(error))
+    } finally {
+      journeyStartInFlight.current = false
     }
   }
 
@@ -612,11 +666,38 @@ export function TransitJourneyPage() {
       </header>
 
       <main id="journey-content" className="journey-layout">
+        <nav className="mobile-page-indicator" aria-label={`현재 단계: ${mobilePageLabels[mobilePage]}`}>
+          <ol>{mobilePageLabels.map((label, index) => <li key={label} data-state={index < mobilePage ? 'complete' : index === mobilePage ? 'current' : 'pending'} aria-current={index === mobilePage ? 'step' : undefined}><span>{index + 1}</span><b>{label}</b></li>)}</ol>
+        </nav>
+
+        <div className="mobile-pager" onPointerDown={handleMobileSwipeStart} onPointerUp={handleMobileSwipeEnd} onPointerCancel={() => { mobileSwipeStart.current = null }}>
+        <div className="mobile-page mobile-intro-page" data-mobile-page="0" data-active={mobilePage === 0} aria-label="서비스 안내">
         <section className="hero" aria-labelledby="page-title">
           <span className="hero-label">실시간 탑승 판단</span>
           <h1 id="page-title">지금 나가면<br />탈 수 있을까요?</h1>
           <p>내 위치와 차량을 함께 계산해서, 어떤 차를 타려면 얼마나 빠르게 움직여야 하는지 알려드려요.</p>
         </section>
+
+        <aside className="usage-guide" aria-labelledby="usage-guide-title">
+          <div className="usage-guide-intro">
+            <span>이렇게 사용해요</span>
+            <h2 id="usage-guide-title">궁금한 승차 구간을<br />직접 선택하세요</h2>
+            <p>전체 경로를 찾는 대신, 지금 탈 노선이나 다음 환승 구간의 탑승 가능성을 계산해요.</p>
+          </div>
+          <ol>
+            <li>
+              <b>01</b>
+              <div><strong>처음 탈 때</strong><p>현재 위치와 승차 정류장을 선택해 접근 중인 차량을 비교하세요.</p></div>
+            </li>
+            <li>
+              <b>02</b>
+              <div><strong>환승을 앞두고 있을 때</strong><p>예정된 환승 지점을 출발 위치로 설정하고, 다음에 탈 노선과 승차 구간을 선택하세요.</p></div>
+            </li>
+          </ol>
+        </aside>
+
+        <MobilePageActions nextLabel="시작하기" onNext={() => goToMobilePage(1)} />
+        </div>
 
         <nav className="step-rail" aria-label="탑승 판단 단계">
           <div className="step-track" aria-hidden="true"><span style={{ width: `${(currentStep - 1) / 3 * 100}%` }} /></div>
@@ -627,6 +708,7 @@ export function TransitJourneyPage() {
           })}</ol>
         </nav>
 
+        <div className="mobile-page" data-mobile-page="1" data-active={mobilePage === 1} aria-label="출발 위치 선택">
         <section className="flow-card location-card" aria-labelledby="location-heading">
           <header className="section-header"><span>1</span><div><h2 id="location-heading">어디서 출발하나요?</h2><p>선택한 위치는 탑승 가능성 계산에만 사용해요.</p></div></header>
           <div className="location-summary" data-ready={Boolean(location)}><div className="location-pin" aria-hidden="true"><i /></div><div><strong>{locationTitle}</strong><p>{locationDetail}</p></div></div>
@@ -644,9 +726,14 @@ export function TransitJourneyPage() {
             {placeQueryResult.isSuccess && placeQueryResult.data.length === 0 ? <QueryState message="일치하는 장소가 없어요. 지역명을 함께 입력해 보세요." /> : null}
             {placeQueryResult.data?.length ? <ul className="selection-list" aria-label="검색된 장소">{placeQueryResult.data.map((result) => <li key={result.id}><button type="button" onClick={() => selectPlace(result)}><span className="list-copy"><strong>{shortPlaceName(result.displayName)}</strong><small>{result.displayName}</small></span><span className="chevron" aria-hidden="true">›</span></button></li>)}</ul> : null}
             <p className="attribution">장소 검색 © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap 기여자</a></p>
+            <p className="privacy-note">검색어는 장소 확인을 위해 OpenStreetMap Nominatim으로 전송돼요. 상세한 개인 주소 입력은 피해주세요.</p>
           </div> : null}
         </section>
 
+        <MobilePageActions previousLabel="안내" nextLabel="노선 선택" nextDisabled={!location} onPrevious={() => goToMobilePage(0)} onNext={() => goToMobilePage(2)} />
+        </div>
+
+        <div className="mobile-page" data-mobile-page="2" data-active={mobilePage === 2} aria-label="노선 선택">
         <section className="flow-card line-card" aria-labelledby="line-heading">
           <header className="section-header"><span>2</span><div><h2 id="line-heading">어떤 노선을 타나요?</h2><p>버스 번호나 지하철 호선으로 찾아보세요.</p></div></header>
           <fieldset className="provider-tabs"><legend>교통수단 선택</legend>{providerOptions.map((option) => <label key={option.value} data-selected={provider === option.value}><input type="radio" name="transitProvider" value={option.value} checked={provider === option.value} onChange={() => changeProvider(option.value)} /><span>{option.label}</span></label>)}</fieldset>
@@ -662,6 +749,10 @@ export function TransitJourneyPage() {
           {lineQuery.data?.length ? <ul className="selection-list line-list" aria-label="검색된 노선">{lineQuery.data.map((line) => <li key={line.id}><button type="button" data-selected={selectedLine?.id === line.id} onClick={() => selectLine(line)}><span className="route-symbol">{line.publicName.slice(0, 3)}</span><span className="list-copy"><strong>{line.publicName}</strong><small>{line.operatorName ?? line.routeType ?? '운영 정보 없음'}</small></span><span className="chevron" aria-hidden="true">›</span></button></li>)}</ul> : null}
         </section>
 
+        <MobilePageActions previousLabel="출발 위치" nextLabel="구간 선택" nextDisabled={!selectedLine} onPrevious={() => goToMobilePage(1)} onNext={() => goToMobilePage(3)} />
+        </div>
+
+        <div className="mobile-page mobile-stop-page" data-mobile-page="3" data-active={mobilePage === 3} aria-label="승차 및 하차 구간 선택">
         <section className="flow-card stop-card" aria-labelledby="boarding-heading" data-locked={!selectedLine}>
           <header className="section-header"><span>3</span><div><h2 id="boarding-heading">어디서 타나요?</h2><p>{boardingStopOrderCopy}</p></div></header>
           {selectedLine && stopQuery.isPending ? <QueryState message="정류장을 불러오고 있어요." /> : null}
@@ -686,6 +777,15 @@ export function TransitJourneyPage() {
           })}</ul> : null}
         </section>
 
+        <section className="mobile-calculate-panel" aria-label="탑승 가능성 계산">
+          <div><strong>{boardingStop ? `${boardingStop.stopName}${alightingStop ? ` → ${alightingStop.stopName}` : ''}` : '승차 구간을 선택해 주세요'}</strong><p>선택한 위치와 접근 차량을 비교해요.</p></div>
+          <Button type="button" display="full" size="xlarge" onClick={startJourney} disabled={!location || !boardingStop} loading={journeyState === 'starting'}>{journeyId ? '다시 계산하기' : '탑승 가능성 계산'}</Button>
+        </section>
+
+        <MobilePageActions previousLabel="노선" onPrevious={() => goToMobilePage(2)} />
+        </div>
+
+        <div className="mobile-page mobile-result-page" data-mobile-page="4" data-active={mobilePage === 4} aria-label="탑승 가능성 결과">
         <section id="decision-section" className="decision-section" aria-labelledby="decision-heading" data-active={Boolean(boardingStop && location)}>
           <div className="decision-setup"><div><span>4 · 실시간 판단</span><h2 id="decision-heading">이제 탈 수 있는지<br />계산해 볼게요</h2><p>{boardingStop ? `${boardingStop.stopName}${alightingStop ? ` → ${alightingStop.stopName}` : ''}` : '위치와 승차 정류장을 선택해 주세요.'}</p></div><Button type="button" display="full" size="xlarge" color="light" onClick={startJourney} disabled={!location || !boardingStop} loading={journeyState === 'starting'}>{journeyId ? '다시 계산하기' : '탑승 가능성 계산'}</Button></div>
           {selectedBoardingAccess?.isRemote && boardingStop ? <div className="distance-notice" role="status"><strong>{boardingStop.stopName}까지 {formatDistance(selectedBoardingAccess.distanceM)}</strong><p>보통 걸음으로 {formatDuration(selectedBoardingAccess.walkMinutes)}이 예상돼요. 첫 차량은 놓칠 가능성이 높아요.</p></div> : null}
@@ -696,6 +796,9 @@ export function TransitJourneyPage() {
           {decisionQuery.isError ? <QueryState message="최신 탑승 판단을 불러오지 못했어요." action="다시 확인" onAction={() => decisionQuery.refetch()} /> : null}
           {decisionQuery.data ? <DecisionPanel decision={decisionQuery.data} routeStops={stopQuery.data ?? []} access={selectedBoardingAccess} boardingStopName={boardingStop?.stopName ?? null} locationAccuracyM={location?.accuracyM} onStop={endActiveJourney} /> : null}
         </section>
+        <MobilePageActions previousLabel="구간 수정" onPrevious={() => goToMobilePage(3)} />
+        </div>
+        </div>
       </main>
       <footer className="site-footer"><strong>첫차</strong><span>실시간 데이터에 따라 탑승 가능성은 달라질 수 있어요.</span></footer>
     </div>
