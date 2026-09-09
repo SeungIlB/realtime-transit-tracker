@@ -37,10 +37,22 @@ mybatis:
 server:
   port: ${PORT:${SERVER_PORT:8080}}
   shutdown: graceful
+  forward-headers-strategy: native
+  max-http-request-header-size: 16KB
+  tomcat:
+    max-http-form-post-size: 32KB
 
 app:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+  security:
+    enabled: true
+    journey-creates-per-minute: 10
+    line-searches-per-minute: 30
+    location-updates-per-minute: 90
+    decisions-per-minute: 60
+    default-requests-per-minute: 180
+    max-request-bytes: 32768
 
 management:
   endpoints:
@@ -56,6 +68,8 @@ management:
 journey:
   default-target-probability: 0.8000
   session-ttl: 30m
+  session-retention: 2h
+  max-active-journeys: 3
   location-ttl: 10m
   max-location-future-skew: 5s
   walking-detour-factor: 1.20

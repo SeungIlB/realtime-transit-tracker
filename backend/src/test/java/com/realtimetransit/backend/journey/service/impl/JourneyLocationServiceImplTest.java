@@ -35,6 +35,7 @@ import com.realtimetransit.backend.journey.service.validation.JourneySessionVali
 class JourneyLocationServiceImplTest {
 
 	private static final Instant NOW = Instant.parse("2026-09-03T01:00:00Z");
+	private static final UUID ANONYMOUS_KEY = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
 	@Mock
 	private JourneyLocationMapper journeyLocationMapper;
@@ -62,14 +63,14 @@ class JourneyLocationServiceImplTest {
 		JourneyLocationCreateRequest request = validRequest();
 		when(journeyLocationMapper.insertTravelerLocationObservation(any())).thenReturn(42L);
 
-		var response = journeyLocationService.addLocation(journeyId, request);
+		var response = journeyLocationService.addLocation(journeyId, ANONYMOUS_KEY, request);
 
 		assertThat(response.getLocationObservationId()).isEqualTo(42L);
 		assertThat(response.getJourneyId()).isEqualTo(journeyId);
 		assertThat(response.getObservedAt()).isEqualTo(request.getObservedAt());
 		assertThat(response.getReceivedAt()).isEqualTo(NOW);
 		assertThat(response.getExpiresAt()).isEqualTo(NOW.plus(Duration.ofMinutes(10)));
-		verify(journeySessionValidator).findActiveJourney(journeyId, NOW);
+		verify(journeySessionValidator).findActiveJourney(journeyId, ANONYMOUS_KEY, NOW);
 
 		ArgumentCaptor<TravelerLocationObservationEntity> captor =
 				ArgumentCaptor.forClass(TravelerLocationObservationEntity.class);
@@ -83,7 +84,7 @@ class JourneyLocationServiceImplTest {
 		request.setLongitude(new BigDecimal("180.000001"));
 
 		assertLocationError(
-				() -> journeyLocationService.addLocation(UUID.randomUUID(), request),
+				() -> journeyLocationService.addLocation(UUID.randomUUID(), ANONYMOUS_KEY, request),
 				ErrorCode.INVALID_JOURNEY_LOCATION);
 		verifyNoInteractions(journeySessionValidator, journeyLocationMapper);
 	}
@@ -94,7 +95,18 @@ class JourneyLocationServiceImplTest {
 		request.setObservedAt(NOW.plusSeconds(6));
 
 		assertLocationError(
-				() -> journeyLocationService.addLocation(UUID.randomUUID(), request),
+				() -> journeyLocationService.addLocation(UUID.randomUUID(), ANONYMOUS_KEY, request),
+				ErrorCode.INVALID_JOURNEY_LOCATION);
+		verifyNoInteractions(journeySessionValidator, journeyLocationMapper);
+	}
+
+	@Test
+	void rejectsObservationOlderThanLocationRetention() {
+		JourneyLocationCreateRequest request = validRequest();
+		request.setObservedAt(NOW.minus(Duration.ofMinutes(10)).minusMillis(1));
+
+		assertLocationError(
+				() -> journeyLocationService.addLocation(UUID.randomUUID(), ANONYMOUS_KEY, request),
 				ErrorCode.INVALID_JOURNEY_LOCATION);
 		verifyNoInteractions(journeySessionValidator, journeyLocationMapper);
 	}
@@ -103,10 +115,10 @@ class JourneyLocationServiceImplTest {
 	void doesNotStoreLocationWhenJourneyIsNotActive() {
 		UUID journeyId = UUID.randomUUID();
 		doThrow(new BusinessException(ErrorCode.JOURNEY_NOT_ACTIVE))
-				.when(journeySessionValidator).findActiveJourney(journeyId, NOW);
+				.when(journeySessionValidator).findActiveJourney(journeyId, ANONYMOUS_KEY, NOW);
 
 		assertLocationError(
-				() -> journeyLocationService.addLocation(journeyId, validRequest()),
+				() -> journeyLocationService.addLocation(journeyId, ANONYMOUS_KEY, validRequest()),
 				ErrorCode.JOURNEY_NOT_ACTIVE);
 		verifyNoInteractions(journeyLocationMapper);
 	}

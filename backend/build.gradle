@@ -8,6 +8,8 @@ group = 'com.realtimetransit'
 version = '0.0.1-SNAPSHOT'
 description = 'Realtime transit tracker backend'
 
+ext['tomcat.version'] = '11.0.25'
+
 java {
 	toolchain {
 		languageVersion = JavaLanguageVersion.of(21)

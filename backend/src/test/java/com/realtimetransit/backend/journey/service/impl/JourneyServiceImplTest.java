@@ -39,6 +39,7 @@ import com.realtimetransit.backend.journey.service.validation.JourneySessionVali
 class JourneyServiceImplTest {
 
 	private static final Instant NOW = Instant.parse("2026-09-03T01:00:00Z");
+	private static final UUID ANONYMOUS_KEY = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
 	@Mock
 	private JourneyMapper journeyMapper;
@@ -53,6 +54,7 @@ class JourneyServiceImplTest {
 		JourneyProperties properties = new JourneyProperties();
 		properties.setDefaultTargetProbability(new BigDecimal("0.8000"));
 		properties.setSessionTtl(Duration.ofMinutes(30));
+		properties.setMaxActiveJourneys(3);
 		properties.setDefaultSlowWalkSpeedMps(new BigDecimal("0.90"));
 		properties.setDefaultWalkSpeedMps(new BigDecimal("1.30"));
 		properties.setDefaultFastWalkSpeedMps(new BigDecimal("1.70"));
@@ -128,15 +130,35 @@ class JourneyServiceImplTest {
 	}
 
 	@Test
+	void rejectsJourneyCreationAtActiveSessionLimit() {
+		JourneyCreateRequest request = validRequest();
+		TravelerProfileEntity profile = TravelerProfileEntity.builder()
+				.id(UUID.randomUUID())
+				.anonymousKey(request.getAnonymousKey())
+				.build();
+		when(journeyMapper.validateJourneyStopsOnSameDirection(
+				request.getLineId(), request.getDirectionId(), request.getBoardingStopId(), null))
+				.thenReturn(Optional.of(validatedStops(request)));
+		when(travelerProfileMapper.findByAnonymousKey(request.getAnonymousKey()))
+				.thenReturn(Optional.of(profile));
+		when(journeyMapper.countActiveJourneySessions(profile.getId(), NOW)).thenReturn(3);
+
+		assertJourneyError(
+				() -> journeyService.createJourney(request),
+				ErrorCode.ACTIVE_JOURNEY_LIMIT_EXCEEDED);
+	}
+
+	@Test
 	void cancelsActiveJourneyAndReturnsStoredResult() {
 		UUID journeyId = UUID.randomUUID();
 		JourneySessionEntity activeJourney = journey(journeyId, "ACTIVE", NOW.plusSeconds(60));
 		JourneySessionEntity cancelledJourney = journey(journeyId, "CANCELLED", NOW.plusSeconds(60));
-		when(journeyMapper.findJourneySessionById(journeyId))
-				.thenReturn(Optional.of(activeJourney), Optional.of(cancelledJourney));
+		when(journeyMapper.findJourneySessionByIdAndAnonymousKey(journeyId, ANONYMOUS_KEY))
+				.thenReturn(Optional.of(activeJourney));
+		when(journeyMapper.findJourneySessionById(journeyId)).thenReturn(Optional.of(cancelledJourney));
 		when(journeyMapper.updateJourneySessionStatus(journeyId, "CANCELLED", NOW)).thenReturn(1);
 
-		var response = journeyService.cancelJourney(journeyId);
+		var response = journeyService.cancelJourney(journeyId, ANONYMOUS_KEY);
 
 		assertThat(response.getJourneyId()).isEqualTo(journeyId);
 		assertThat(response.getStatus()).isEqualTo("CANCELLED");
@@ -146,10 +168,10 @@ class JourneyServiceImplTest {
 	@Test
 	void rejectsMissingJourneyDuringCancellation() {
 		UUID journeyId = UUID.randomUUID();
-		when(journeyMapper.findJourneySessionById(journeyId)).thenReturn(Optional.empty());
+		when(journeyMapper.findJourneySessionByIdAndAnonymousKey(journeyId, ANONYMOUS_KEY)).thenReturn(Optional.empty());
 
 		assertJourneyError(
-				() -> journeyService.cancelJourney(journeyId),
+				() -> journeyService.cancelJourney(journeyId, ANONYMOUS_KEY),
 				ErrorCode.JOURNEY_NOT_FOUND);
 	}
 
@@ -157,28 +179,28 @@ class JourneyServiceImplTest {
 	void rejectsInactiveAndExpiredJourneys() {
 		UUID inactiveJourneyId = UUID.randomUUID();
 		UUID expiredJourneyId = UUID.randomUUID();
-		when(journeyMapper.findJourneySessionById(inactiveJourneyId))
+		when(journeyMapper.findJourneySessionByIdAndAnonymousKey(inactiveJourneyId, ANONYMOUS_KEY))
 				.thenReturn(Optional.of(journey(inactiveJourneyId, "CANCELLED", NOW.plusSeconds(60))));
-		when(journeyMapper.findJourneySessionById(expiredJourneyId))
+		when(journeyMapper.findJourneySessionByIdAndAnonymousKey(expiredJourneyId, ANONYMOUS_KEY))
 				.thenReturn(Optional.of(journey(expiredJourneyId, "ACTIVE", NOW)));
 
 		assertJourneyError(
-				() -> journeyService.cancelJourney(inactiveJourneyId),
+				() -> journeyService.cancelJourney(inactiveJourneyId, ANONYMOUS_KEY),
 				ErrorCode.JOURNEY_NOT_ACTIVE);
 		assertJourneyError(
-				() -> journeyService.cancelJourney(expiredJourneyId),
+				() -> journeyService.cancelJourney(expiredJourneyId, ANONYMOUS_KEY),
 				ErrorCode.JOURNEY_NOT_ACTIVE);
 	}
 
 	@Test
 	void reportsCancellationUpdateFailure() {
 		UUID journeyId = UUID.randomUUID();
-		when(journeyMapper.findJourneySessionById(journeyId))
+		when(journeyMapper.findJourneySessionByIdAndAnonymousKey(journeyId, ANONYMOUS_KEY))
 				.thenReturn(Optional.of(journey(journeyId, "ACTIVE", NOW.plusSeconds(60))));
 		when(journeyMapper.updateJourneySessionStatus(journeyId, "CANCELLED", NOW)).thenReturn(0);
 
 		assertJourneyError(
-				() -> journeyService.cancelJourney(journeyId),
+				() -> journeyService.cancelJourney(journeyId, ANONYMOUS_KEY),
 				ErrorCode.JOURNEY_STATUS_UPDATE_FAILED);
 	}
 

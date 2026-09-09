@@ -119,6 +119,9 @@ class JourneyMapperIntegrationTest {
 		UUID journeyId = UUID.randomUUID();
 		journeyMapper.insertJourneySession(journey(
 				journeyId, profileId, fixture, now, now.plusSeconds(3600), "ACTIVE"));
+		UUID anonymousKey = travelerProfileMapper.findById(profileId).orElseThrow().getAnonymousKey();
+		assertThat(journeyMapper.findJourneySessionByIdAndAnonymousKey(journeyId, anonymousKey)).isPresent();
+		assertThat(journeyMapper.findJourneySessionByIdAndAnonymousKey(journeyId, UUID.randomUUID())).isEmpty();
 		assertThat(journeyMapper.findJourneySessionById(journeyId))
 				.get()
 				.satisfies(journey -> {
@@ -162,7 +165,7 @@ class JourneyMapperIntegrationTest {
 	}
 
 	@Test
-	void returnsLatestUnexpiredLocationAndDeletesExpiredLocationsInBatches() {
+	void returnsLatestUnexpiredLocationAndDeletesAllExpiredLocations() {
 		TransitFixture fixture = transitFixture("location");
 		Instant now = Instant.now();
 		UUID journeyId = insertJourney(fixture, now);
@@ -180,7 +183,7 @@ class JourneyMapperIntegrationTest {
 					assertThat(location.getId()).isEqualTo(latestLocationId);
 					assertThat(location.getLatitude()).isEqualByComparingTo("37.500200");
 				});
-		assertThat(journeyLocationMapper.deleteExpiredLocations(now, 1)).isEqualTo(1);
+		assertThat(journeyLocationMapper.deleteExpiredLocations(now)).isEqualTo(1);
 		assertThat(jdbcTemplate.queryForObject(
 				"SELECT COUNT(*) FROM traveler_location_observation WHERE id = ?",
 				Integer.class, expiredLocationId)).isZero();

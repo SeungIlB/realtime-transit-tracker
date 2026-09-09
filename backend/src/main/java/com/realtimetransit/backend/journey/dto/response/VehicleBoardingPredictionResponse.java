@@ -23,6 +23,7 @@ public class VehicleBoardingPredictionResponse {
 	private String alightingStopStatus;
 	private String movementStatus;
 	private String currentStopName;
+	private String destinationStopName;
 	private Integer currentSequence;
 	private Integer remainingStops;
 	private BigDecimal latitude;

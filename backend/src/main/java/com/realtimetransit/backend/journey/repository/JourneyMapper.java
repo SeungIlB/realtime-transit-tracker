@@ -17,6 +17,14 @@ public interface JourneyMapper {
 
 	Optional<JourneySessionEntity> findJourneySessionById(@Param("id") UUID id);
 
+	Optional<JourneySessionEntity> findJourneySessionByIdAndAnonymousKey(
+			@Param("id") UUID id,
+			@Param("anonymousKey") UUID anonymousKey);
+
+	int countActiveJourneySessions(
+			@Param("travelerProfileId") UUID travelerProfileId,
+			@Param("asOf") Instant asOf);
+
 	Optional<JourneyStopValidationEntity> validateJourneyStopsOnSameDirection(
 			@Param("lineId") UUID lineId,
 			@Param("directionId") UUID directionId,
@@ -31,5 +39,9 @@ public interface JourneyMapper {
 	int expireJourneySessionsBefore(
 			@Param("asOf") Instant asOf,
 			@Param("updatedAt") Instant updatedAt,
+			@Param("limit") int limit);
+
+	int deleteInactiveJourneySessionsBefore(
+			@Param("retainedAfter") Instant retainedAfter,
 			@Param("limit") int limit);
 }

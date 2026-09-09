@@ -45,12 +45,6 @@
 
     <delete id="deleteExpiredLocations">
         DELETE FROM traveler_location_observation
-        WHERE id IN (
-            SELECT id
-            FROM traveler_location_observation
-            WHERE expires_at <![CDATA[ < ]]> #{asOf}
-            ORDER BY expires_at ASC, id ASC
-            LIMIT #{limit}
-        )
+        WHERE expires_at <![CDATA[ < ]]> #{asOf}
     </delete>
 </mapper>

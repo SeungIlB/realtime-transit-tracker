@@ -70,16 +70,18 @@ class JourneyApiE2ETest {
 	void createsJourneyStoresLocationCalculatesDecisionAndCancels() throws Exception {
 		TransitFixture fixture = insertTransitFixture();
 		Instant observedAt = Instant.now();
+		UUID anonymousKey = UUID.randomUUID();
 		insertArrival(fixture, observedAt);
 
 		String createBody = objectMapper.writeValueAsString(Map.of(
-				"anonymousKey", UUID.randomUUID(),
+				"anonymousKey", anonymousKey,
 				"lineId", fixture.lineId,
 				"directionId", fixture.directionId,
 				"boardingStopId", fixture.boardingStopId,
 				"alightingStopId", fixture.alightingStopId,
 				"targetProbability", new BigDecimal("0.8000")));
 		String createResponse = mockMvc.perform(post("/api/v1/journeys")
+				.header("X-Anonymous-Key", anonymousKey)
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(createBody))
 				.andExpect(status().isCreated())
@@ -90,6 +92,7 @@ class JourneyApiE2ETest {
 				objectMapper.readTree(createResponse).path("data").path("journeyId").asString());
 
 		mockMvc.perform(post("/api/v1/journeys/{journeyId}/locations", journeyId)
+				.header("X-Anonymous-Key", anonymousKey)
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(objectMapper.writeValueAsString(Map.of(
 						"latitude", new BigDecimal("37.100100"),
@@ -101,7 +104,8 @@ class JourneyApiE2ETest {
 				.andExpect(jsonPath("$.data.journeyId").value(journeyId.toString()))
 				.andExpect(jsonPath("$.data.locationObservationId").isNumber());
 
-		mockMvc.perform(get("/api/v1/journeys/{journeyId}/decision", journeyId))
+		mockMvc.perform(get("/api/v1/journeys/{journeyId}/decision", journeyId)
+				.header("X-Anonymous-Key", anonymousKey))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.success").value(true))
 				.andExpect(jsonPath("$.data.decision").value("COMFORTABLE"))
@@ -116,10 +120,12 @@ class JourneyApiE2ETest {
 				"SELECT COUNT(*) FROM boarding_prediction_snapshot WHERE journey_id = ? AND recommended = TRUE",
 				Integer.class, journeyId)).isEqualTo(1);
 
-		mockMvc.perform(delete("/api/v1/journeys/{journeyId}", journeyId))
+		mockMvc.perform(delete("/api/v1/journeys/{journeyId}", journeyId)
+				.header("X-Anonymous-Key", anonymousKey))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.status").value("CANCELLED"));
-		mockMvc.perform(get("/api/v1/journeys/{journeyId}/decision", journeyId))
+		mockMvc.perform(get("/api/v1/journeys/{journeyId}/decision", journeyId)
+				.header("X-Anonymous-Key", anonymousKey))
 				.andExpect(status().isConflict())
 				.andExpect(jsonPath("$.code").value("JOURNEY_NOT_ACTIVE"));
 	}

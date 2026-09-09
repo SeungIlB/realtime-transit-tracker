@@ -14,6 +14,8 @@ import lombok.Setter;
 public class JourneyProperties {
 	private BigDecimal defaultTargetProbability;
 	private Duration sessionTtl;
+	private Duration sessionRetention;
+	private int maxActiveJourneys;
 	private Duration locationTtl;
 	private Duration maxLocationFutureSkew;
 	private BigDecimal walkingDetourFactor;

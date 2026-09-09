@@ -18,14 +18,17 @@ public class JourneySessionValidator {
 
 	private final JourneyMapper journeyMapper;
 
-	public JourneySessionEntity findActiveJourney(UUID journeyId, Instant now) {
+	public JourneySessionEntity findActiveJourney(UUID journeyId, UUID anonymousKey, Instant now) {
 		if (journeyId == null) {
 			throw new BusinessException(ErrorCode.INVALID_JOURNEY_REQUEST, "journeyId is required");
 		}
-		JourneySessionEntity journey = journeyMapper.findJourneySessionById(journeyId)
+		if (anonymousKey == null) {
+			throw new BusinessException(ErrorCode.INVALID_JOURNEY_REQUEST, "anonymousKey is required");
+		}
+		JourneySessionEntity journey = journeyMapper.findJourneySessionByIdAndAnonymousKey(journeyId, anonymousKey)
 				.orElseThrow(() -> new BusinessException(
 						ErrorCode.JOURNEY_NOT_FOUND,
-						"journeyId=" + journeyId));
+						"journey session was not found"));
 		if (!"ACTIVE".equals(journey.getStatus())) {
 			throw new BusinessException(
 					ErrorCode.JOURNEY_NOT_ACTIVE,

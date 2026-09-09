@@ -51,6 +51,25 @@
         WHERE id = #{id}
     </select>
 
+    <select id="findJourneySessionByIdAndAnonymousKey" resultMap="journeySessionMap">
+        SELECT
+            js.id, js.traveler_profile_id, js.line_id, js.direction_id,
+            js.boarding_stop_id, js.alighting_stop_id, js.target_probability,
+            js.desired_arrival_at, js.status, js.expires_at, js.created_at, js.updated_at
+        FROM journey_session js
+        INNER JOIN traveler_profile tp ON tp.id = js.traveler_profile_id
+        WHERE js.id = #{id}
+          AND tp.anonymous_key = #{anonymousKey}
+    </select>
+
+    <select id="countActiveJourneySessions" resultType="int">
+        SELECT COUNT(*)
+        FROM journey_session
+        WHERE traveler_profile_id = #{travelerProfileId}
+          AND status = 'ACTIVE'
+          AND expires_at > #{asOf}
+    </select>
+
     <select id="validateJourneyStopsOnSameDirection" resultMap="journeyStopValidationMap">
 		WITH boarding_position AS (
 			SELECT
@@ -118,4 +137,16 @@
             LIMIT #{limit}
         )
     </update>
+
+    <delete id="deleteInactiveJourneySessionsBefore">
+        DELETE FROM journey_session
+        WHERE id IN (
+            SELECT id
+            FROM journey_session
+            WHERE status != 'ACTIVE'
+              AND updated_at <![CDATA[ < ]]> #{retainedAfter}
+            ORDER BY updated_at ASC, id ASC
+            LIMIT #{limit}
+        )
+    </delete>
 </mapper>

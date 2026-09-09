@@ -1,14 +1,16 @@
 package com.realtimetransit.backend.transit.controller;
 
-import java.math.BigDecimal;
 import java.util.List;
 
-import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.realtimetransit.backend.common.dto.ResponseDTO;
+import com.realtimetransit.backend.common.error.BusinessException;
+import com.realtimetransit.backend.common.error.ErrorCode;
+import com.realtimetransit.backend.transit.dto.request.TransitLineSearchRequest;
 import com.realtimetransit.backend.transit.dto.response.TransitLineResponse;
 import com.realtimetransit.backend.transit.service.TransitLineService;
 
@@ -21,14 +23,17 @@ public class TransitLineController {
 
 	private final TransitLineService transitLineService;
 
-	@GetMapping
+	@PostMapping("/search")
 	public ResponseDTO<List<TransitLineResponse>> searchLines(
-			@RequestParam(defaultValue = "GBIS") String provider,
-			@RequestParam String query,
-			@RequestParam(defaultValue = "20") int limit,
-			@RequestParam(required = false) BigDecimal latitude,
-			@RequestParam(required = false) BigDecimal longitude) {
-		return ResponseDTO.success(
-				transitLineService.searchActiveLines(provider, query, limit, latitude, longitude));
+			@RequestBody TransitLineSearchRequest request) {
+		if (request == null) {
+			throw new BusinessException(ErrorCode.INVALID_REQUEST, "request is required");
+		}
+		return ResponseDTO.success(transitLineService.searchActiveLines(
+				request.getProvider(),
+				request.getQuery(),
+				request.getLimit() == null ? 20 : request.getLimit(),
+				request.getLatitude(),
+				request.getLongitude()));
 	}
 }

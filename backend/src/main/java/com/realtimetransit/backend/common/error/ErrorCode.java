@@ -14,6 +14,7 @@ public enum ErrorCode {
 	JOURNEY_NOT_FOUND(HttpStatus.NOT_FOUND, "JOURNEY_NOT_FOUND", "Journey session was not found"),
 	JOURNEY_NOT_ACTIVE(HttpStatus.CONFLICT, "JOURNEY_NOT_ACTIVE", "Journey session is not active"),
 	JOURNEY_STATUS_UPDATE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "JOURNEY_STATUS_UPDATE_FAILED", "Journey status could not be updated"),
+	ACTIVE_JOURNEY_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "ACTIVE_JOURNEY_LIMIT_EXCEEDED", "Too many active journey sessions"),
 	INVALID_JOURNEY_LOCATION(HttpStatus.BAD_REQUEST, "INVALID_JOURNEY_LOCATION", "Journey location is invalid"),
 	JOURNEY_PROFILE_NOT_FOUND(HttpStatus.NOT_FOUND, "JOURNEY_PROFILE_NOT_FOUND", "Journey traveler profile was not found"),
 	BOARDING_STOP_COORDINATES_MISSING(HttpStatus.UNPROCESSABLE_CONTENT, "BOARDING_STOP_COORDINATES_MISSING", "Boarding stop coordinates are missing"),

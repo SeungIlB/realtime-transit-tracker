@@ -79,9 +79,9 @@ public class BoardingDecisionServiceImpl implements BoardingDecisionService {
 	private final TransitArrivalProperties arrivalProperties;
 
 	@Override
-	public BoardingDecisionResponse calculateDecision(UUID journeyId) {
+	public BoardingDecisionResponse calculateDecision(UUID journeyId, UUID anonymousKey) {
 		Instant calculatedAt = clock.instant();
-		JourneySessionEntity journey = journeySessionValidator.findActiveJourney(journeyId, calculatedAt);
+		JourneySessionEntity journey = journeySessionValidator.findActiveJourney(journeyId, anonymousKey, calculatedAt);
 		var location = journeyLocationMapper.findLatestLocationByJourneyId(journeyId, calculatedAt);
 		if (location.isEmpty() || !confidenceEvaluator.isLocationUsable(location.get(), calculatedAt)) {
 			return statusResponse(journey, BoardingDecision.INSUFFICIENT_DATA,
@@ -314,6 +314,7 @@ public class BoardingDecisionServiceImpl implements BoardingDecisionService {
 				.alightingStopStatus(calculation.getArrival().getAlightingStopStatus())
 				.movementStatus(calculation.getArrival().getMovementStatus())
 				.currentStopName(calculation.getArrival().getCurrentStopName())
+				.destinationStopName(calculation.getArrival().getDestinationStopName())
 				.currentSequence(calculation.getArrival().getCurrentSequence())
 				.remainingStops(calculation.getArrival().getRemainingStops())
 				.latitude(calculation.getArrival().getLatitude())

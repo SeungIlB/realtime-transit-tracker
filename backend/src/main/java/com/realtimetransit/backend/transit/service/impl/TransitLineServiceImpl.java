@@ -20,6 +20,7 @@ import lombok.RequiredArgsConstructor;
 public class TransitLineServiceImpl implements TransitLineService {
 
 	private static final int MAX_SEARCH_LIMIT = 100;
+	private static final int MAX_SEARCH_QUERY_LENGTH = 50;
 
 	private final TransitProviderMapper transitProviderMapper;
 	private final TransitLineMapper transitLineMapper;
@@ -73,6 +74,9 @@ public class TransitLineServiceImpl implements TransitLineService {
 		}
 		if (query == null || query.isBlank()) {
 			throw new BusinessException(ErrorCode.INVALID_REQUEST, "query is required");
+		}
+		if (query.strip().length() > MAX_SEARCH_QUERY_LENGTH) {
+			throw new BusinessException(ErrorCode.INVALID_REQUEST, "query must be at most 50 characters");
 		}
 	}
 }

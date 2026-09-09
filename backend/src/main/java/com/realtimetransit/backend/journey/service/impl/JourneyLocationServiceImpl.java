@@ -27,6 +27,8 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 @EnableConfigurationProperties(JourneyProperties.class)
 public class JourneyLocationServiceImpl implements JourneyLocationService {
+	private static final BigDecimal MAX_ACCURACY_M = new BigDecimal("100000.00");
+	private static final BigDecimal MAX_SPEED_MPS = new BigDecimal("100.00");
 
 	private final JourneyLocationMapper journeyLocationMapper;
 	private final Clock clock;
@@ -37,10 +39,11 @@ public class JourneyLocationServiceImpl implements JourneyLocationService {
 	@Transactional
 	public JourneyLocationResponse addLocation(
 			UUID journeyId,
+			UUID anonymousKey,
 			JourneyLocationCreateRequest request) {
 		Instant now = clock.instant();
 		validateLocationRequest(journeyId, request, now);
-		journeySessionValidator.findActiveJourney(journeyId, now);
+		journeySessionValidator.findActiveJourney(journeyId, anonymousKey, now);
 		TravelerLocationObservationEntity observation = buildLocationObservation(journeyId, request, now);
 		TravelerLocationObservationEntity savedObservation = saveLocationObservation(observation);
 
@@ -77,15 +80,25 @@ public class JourneyLocationServiceImpl implements JourneyLocationService {
 		if (request.getAccuracyM().compareTo(BigDecimal.ZERO) < 0) {
 			throw new BusinessException(ErrorCode.INVALID_JOURNEY_LOCATION, "accuracyM must be greater than or equal to 0");
 		}
+		if (request.getAccuracyM().compareTo(MAX_ACCURACY_M) > 0) {
+			throw new BusinessException(ErrorCode.INVALID_JOURNEY_LOCATION, "accuracyM is too large");
+		}
 		if (request.getSpeedMps() != null
 				&& request.getSpeedMps().compareTo(BigDecimal.ZERO) < 0) {
 			throw new BusinessException(ErrorCode.INVALID_JOURNEY_LOCATION, "speedMps must be greater than or equal to 0");
+		}
+		if (request.getSpeedMps() != null
+				&& request.getSpeedMps().compareTo(MAX_SPEED_MPS) > 0) {
+			throw new BusinessException(ErrorCode.INVALID_JOURNEY_LOCATION, "speedMps is too large");
 		}
 		if (request.getObservedAt() == null) {
 			throw new BusinessException(ErrorCode.INVALID_JOURNEY_LOCATION, "observedAt is required");
 		}
 		if (request.getObservedAt().isAfter(now.plus(properties.getMaxLocationFutureSkew()))) {
 			throw new BusinessException(ErrorCode.INVALID_JOURNEY_LOCATION, "observedAt is too far in the future");
+		}
+		if (request.getObservedAt().isBefore(now.minus(properties.getLocationTtl()))) {
+			throw new BusinessException(ErrorCode.INVALID_JOURNEY_LOCATION, "observedAt is too old");
 		}
 	}
 

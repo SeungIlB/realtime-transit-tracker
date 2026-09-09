@@ -9,10 +9,13 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.realtimetransit.backend.common.dto.ResponseDTO;
+import com.realtimetransit.backend.common.error.BusinessException;
+import com.realtimetransit.backend.common.error.ErrorCode;
 import com.realtimetransit.backend.journey.dto.request.JourneyCreateRequest;
 import com.realtimetransit.backend.journey.dto.request.JourneyLocationCreateRequest;
 import com.realtimetransit.backend.journey.dto.response.BoardingDecisionResponse;
@@ -36,7 +39,11 @@ public class JourneyController {
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
 	public ResponseDTO<JourneySessionResponse> createJourney(
+			@RequestHeader("X-Anonymous-Key") UUID anonymousKey,
 			@RequestBody JourneyCreateRequest request) {
+		if (request == null || !anonymousKey.equals(request.getAnonymousKey())) {
+			throw new BusinessException(ErrorCode.INVALID_JOURNEY_REQUEST, "anonymous key does not match request");
+		}
 		return ResponseDTO.success(journeyService.createJourney(request));
 	}
 
@@ -44,19 +51,22 @@ public class JourneyController {
 	@ResponseStatus(HttpStatus.CREATED)
 	public ResponseDTO<JourneyLocationResponse> addLocation(
 			@PathVariable UUID journeyId,
+			@RequestHeader("X-Anonymous-Key") UUID anonymousKey,
 			@RequestBody JourneyLocationCreateRequest request) {
-		return ResponseDTO.success(journeyLocationService.addLocation(journeyId, request));
+		return ResponseDTO.success(journeyLocationService.addLocation(journeyId, anonymousKey, request));
 	}
 
 	@GetMapping("/{journeyId}/decision")
 	public ResponseDTO<BoardingDecisionResponse> calculateDecision(
-			@PathVariable UUID journeyId) {
-		return ResponseDTO.success(boardingDecisionService.calculateDecision(journeyId));
+			@PathVariable UUID journeyId,
+			@RequestHeader("X-Anonymous-Key") UUID anonymousKey) {
+		return ResponseDTO.success(boardingDecisionService.calculateDecision(journeyId, anonymousKey));
 	}
 
 	@DeleteMapping("/{journeyId}")
 	public ResponseDTO<JourneySessionResponse> cancelJourney(
-			@PathVariable UUID journeyId) {
-		return ResponseDTO.success(journeyService.cancelJourney(journeyId));
+			@PathVariable UUID journeyId,
+			@RequestHeader("X-Anonymous-Key") UUID anonymousKey) {
+		return ResponseDTO.success(journeyService.cancelJourney(journeyId, anonymousKey));
 	}
 }

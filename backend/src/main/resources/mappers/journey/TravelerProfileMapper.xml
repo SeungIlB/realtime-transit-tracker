@@ -50,4 +50,25 @@
         FROM traveler_profile
         WHERE anonymous_key = #{anonymousKey}
     </select>
+
+    <select id="lockById" resultType="java.util.UUID">
+        SELECT id
+        FROM traveler_profile
+        WHERE id = #{id}
+        FOR UPDATE
+    </select>
+
+    <delete id="deleteUnusedProfilesBefore">
+        DELETE FROM traveler_profile
+        WHERE id IN (
+            SELECT tp.id
+            FROM traveler_profile tp
+            WHERE tp.updated_at <![CDATA[ < ]]> #{retainedAfter}
+              AND NOT EXISTS (
+                  SELECT 1 FROM journey_session js WHERE js.traveler_profile_id = tp.id
+              )
+            ORDER BY tp.updated_at ASC, tp.id ASC
+            LIMIT #{limit}
+        )
+    </delete>
 </mapper>

@@ -50,6 +50,7 @@ import tools.jackson.databind.ObjectMapper;
 class BoardingDecisionServiceImplTest {
 
 	private static final Instant NOW = Instant.parse("2026-09-03T01:00:00Z");
+	private static final UUID ANONYMOUS_KEY = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
 	@Mock private JourneySessionValidator journeySessionValidator;
 	@Mock private JourneyLocationMapper journeyLocationMapper;
@@ -91,11 +92,11 @@ class BoardingDecisionServiceImplTest {
 	@Test
 	void returnsInsufficientDataWhenRecentLocationDoesNotExist() {
 		JourneySessionEntity journey = journey();
-		when(journeySessionValidator.findActiveJourney(journey.getId(), NOW)).thenReturn(journey);
+		when(journeySessionValidator.findActiveJourney(journey.getId(), ANONYMOUS_KEY, NOW)).thenReturn(journey);
 		when(journeyLocationMapper.findLatestLocationByJourneyId(journey.getId(), NOW))
 				.thenReturn(Optional.empty());
 
-		var response = service.calculateDecision(journey.getId());
+		var response = service.calculateDecision(journey.getId(), ANONYMOUS_KEY);
 
 		assertThat(response.getDecision()).isEqualTo("INSUFFICIENT_DATA");
 		assertThat(response.getVehicles()).isEmpty();
@@ -109,7 +110,7 @@ class BoardingDecisionServiceImplTest {
 				journey.getLineId(), journey.getBoardingStopId(), journey.getAlightingStopId(), NOW,
 				NOW.minusSeconds(120), 2)).thenReturn(List.of(), List.of());
 
-		var response = service.calculateDecision(journey.getId());
+		var response = service.calculateDecision(journey.getId(), ANONYMOUS_KEY);
 
 		assertThat(response.getDecision()).isEqualTo("NO_VEHICLE");
 		assertThat(response.getVehicles()).isEmpty();
@@ -139,7 +140,7 @@ class BoardingDecisionServiceImplTest {
 				journey.getLineId(), journey.getBoardingStopId(), journey.getAlightingStopId(), NOW,
 				NOW.minusSeconds(120), 2)).thenReturn(List.of(arrival));
 
-		var response = service.calculateDecision(journey.getId());
+		var response = service.calculateDecision(journey.getId(), ANONYMOUS_KEY);
 
 		assertThat(response.getDecision()).isEqualTo("COMFORTABLE");
 		assertThat(response.getRecommendedVehicleId()).isEqualTo("vehicle-1");
@@ -189,7 +190,7 @@ class BoardingDecisionServiceImplTest {
 				.latitude(decimal("37.500500"))
 				.longitude(decimal("127.000500"))
 				.build();
-		when(journeySessionValidator.findActiveJourney(journey.getId(), NOW)).thenReturn(journey);
+		when(journeySessionValidator.findActiveJourney(journey.getId(), ANONYMOUS_KEY, NOW)).thenReturn(journey);
 		when(journeyLocationMapper.findLatestLocationByJourneyId(journey.getId(), NOW))
 				.thenReturn(Optional.of(location));
 		when(travelerProfileMapper.findById(journey.getTravelerProfileId())).thenReturn(Optional.of(profile));

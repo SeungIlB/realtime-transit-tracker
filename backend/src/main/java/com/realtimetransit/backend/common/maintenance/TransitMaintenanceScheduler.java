@@ -11,6 +11,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.realtimetransit.backend.journey.repository.JourneyLocationMapper;
 import com.realtimetransit.backend.journey.repository.JourneyMapper;
+import com.realtimetransit.backend.journey.repository.TravelerProfileMapper;
+import com.realtimetransit.backend.journey.config.JourneyProperties;
 import com.realtimetransit.backend.provider.service.ObservationRetentionService;
 
 import lombok.RequiredArgsConstructor;
@@ -24,7 +26,9 @@ public class TransitMaintenanceScheduler {
 	private final ObservationRetentionService observationRetentionService;
 	private final JourneyLocationMapper journeyLocationMapper;
 	private final JourneyMapper journeyMapper;
+	private final TravelerProfileMapper travelerProfileMapper;
 	private final TransitMaintenanceProperties properties;
+	private final JourneyProperties journeyProperties;
 	private final Clock clock;
 
 	@Scheduled(
@@ -39,7 +43,10 @@ public class TransitMaintenanceScheduler {
 		observationRetentionService.deleteOldVehicleRunObservations(
 				properties.getObservationRetention(), limit);
 		observationRetentionService.deleteExpiredRawObservations(limit);
-		journeyLocationMapper.deleteExpiredLocations(now, limit);
+		journeyLocationMapper.deleteExpiredLocations(now);
 		journeyMapper.expireJourneySessionsBefore(now, now, limit);
+		Instant retainedAfter = now.minus(journeyProperties.getSessionRetention());
+		journeyMapper.deleteInactiveJourneySessionsBefore(retainedAfter, limit);
+		travelerProfileMapper.deleteUnusedProfilesBefore(retainedAfter, limit);
 	}
 }

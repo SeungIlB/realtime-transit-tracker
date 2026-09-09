@@ -18,7 +18,5 @@ public interface JourneyLocationMapper {
 			@Param("journeyId") UUID journeyId,
 			@Param("asOf") Instant asOf);
 
-	int deleteExpiredLocations(
-			@Param("asOf") Instant asOf,
-			@Param("limit") int limit);
+	int deleteExpiredLocations(@Param("asOf") Instant asOf);
 }

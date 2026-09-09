@@ -43,6 +43,10 @@ public class JourneyServiceImpl implements JourneyService {
 		validateCreateRequest(request, now);
 		JourneyStopValidationEntity validatedStops = validateJourneyStops(request);
 		TravelerProfileEntity profile = resolveTravelerProfile(request.getAnonymousKey());
+		travelerProfileMapper.lockById(profile.getId());
+		if (journeyMapper.countActiveJourneySessions(profile.getId(), now) >= properties.getMaxActiveJourneys()) {
+			throw new BusinessException(ErrorCode.ACTIVE_JOURNEY_LIMIT_EXCEEDED);
+		}
 		JourneySessionEntity journey = buildJourneySession(request, profile, validatedStops, now);
 		JourneySessionEntity savedJourney = saveAndReadJourneySession(journey);
 
@@ -51,9 +55,9 @@ public class JourneyServiceImpl implements JourneyService {
 
 	@Override
 	@Transactional
-	public JourneySessionResponse cancelJourney(UUID journeyId) {
+	public JourneySessionResponse cancelJourney(UUID journeyId, UUID anonymousKey) {
 		Instant now = clock.instant();
-		JourneySessionEntity activeJourney = journeySessionValidator.findActiveJourney(journeyId, now);
+		JourneySessionEntity activeJourney = journeySessionValidator.findActiveJourney(journeyId, anonymousKey, now);
 		JourneySessionEntity cancelledJourney = cancelAndReadJourney(activeJourney, now);
 		return JourneySessionResponse.from(cancelledJourney);
 	}

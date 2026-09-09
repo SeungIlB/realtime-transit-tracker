@@ -1,6 +1,7 @@
 package com.realtimetransit.backend.transit.controller;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -15,6 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -130,9 +132,11 @@ class TransitJourneyApiE2ETest {
 						.receivedAt(now.minusSeconds(5))
 						.build());
 
-		mockMvc.perform(get("/api/v1/lines")
-				.param("provider", "GBIS")
-				.param("query", "E2E-1000"))
+                mockMvc.perform(post("/api/v1/lines/search")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                                {"provider":"GBIS","query":"E2E-1000","limit":20}
+                                                """))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.success").value(true))
 				.andExpect(jsonPath("$.data[0].id").value(lineId.toString()))

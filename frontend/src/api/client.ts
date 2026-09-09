@@ -17,6 +17,16 @@ export class ApiError extends Error {
   }
 }
 
+export function getAnonymousKey() {
+  const storageKey = 'first-bus-anonymous-key'
+  window.localStorage.removeItem(storageKey)
+  const existingKey = window.sessionStorage.getItem(storageKey)
+  if (existingKey) return existingKey
+  const createdKey = crypto.randomUUID()
+  window.sessionStorage.setItem(storageKey, createdKey)
+  return createdKey
+}
+
 export function resolveApiUrl(path: string, baseUrl = import.meta.env.VITE_API_BASE_URL): string {
   if (!baseUrl) {
     return path
@@ -29,6 +39,9 @@ export function resolveApiUrl(path: string, baseUrl = import.meta.env.VITE_API_B
 
 export async function requestApi<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers)
+  if (path.startsWith('/api/v1/journeys') && !headers.has('X-Anonymous-Key')) {
+    headers.set('X-Anonymous-Key', getAnonymousKey())
+  }
   if (init.body && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json')
   }
@@ -65,9 +78,14 @@ export async function requestApi<T>(path: string, init: RequestInit = {}): Promi
   return body.data
 }
 
-export async function fetchApi<T>(path: string, signal?: AbortSignal, timeoutMs?: number): Promise<T> {
+export async function fetchApi<T>(
+  path: string,
+  signal?: AbortSignal,
+  timeoutMs?: number,
+  init: RequestInit = {},
+): Promise<T> {
   if (!timeoutMs) {
-    return requestApi<T>(path, { signal })
+    return requestApi<T>(path, { ...init, signal })
   }
 
   const controller = new AbortController()
@@ -84,7 +102,7 @@ export async function fetchApi<T>(path: string, signal?: AbortSignal, timeoutMs?
   }, timeoutMs)
 
   try {
-    return await requestApi<T>(path, { signal: controller.signal })
+    return await requestApi<T>(path, { ...init, signal: controller.signal })
   } catch (error) {
     if (timedOut) {
       throw new ApiError('REQUEST_TIMEOUT', '요청 시간이 초과되었습니다.', 408)

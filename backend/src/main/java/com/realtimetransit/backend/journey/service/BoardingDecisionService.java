@@ -6,5 +6,5 @@ import com.realtimetransit.backend.journey.dto.response.BoardingDecisionResponse
 
 public interface BoardingDecisionService {
 
-	BoardingDecisionResponse calculateDecision(UUID journeyId);
+	BoardingDecisionResponse calculateDecision(UUID journeyId, UUID anonymousKey);
 }

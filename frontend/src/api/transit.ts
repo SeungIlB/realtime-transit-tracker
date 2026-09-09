@@ -59,13 +59,17 @@ export function searchTransitLines(
   location?: { latitude: number; longitude: number } | null,
   signal?: AbortSignal,
 ) {
-  const params = new URLSearchParams({ provider, query, limit: '20' })
-  if (location) {
-    params.set('latitude', String(location.latitude))
-    params.set('longitude', String(location.longitude))
-  }
   const timeoutMs = provider === 'NATIONAL_PRECISION_BUS' ? LINE_SEARCH_TIMEOUT_MS : undefined
-  return fetchApi<TransitLine[]>(`/api/v1/lines?${params}`, signal, timeoutMs)
+  return fetchApi<TransitLine[]>('/api/v1/lines/search', signal, timeoutMs, {
+    method: 'POST',
+    body: JSON.stringify({
+      provider,
+      query,
+      limit: 20,
+      latitude: location?.latitude ?? null,
+      longitude: location?.longitude ?? null,
+    }),
+  })
 }
 
 export function fetchDirectedStops(lineId: string, signal?: AbortSignal) {

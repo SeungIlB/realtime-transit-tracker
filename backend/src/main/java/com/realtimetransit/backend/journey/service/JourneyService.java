@@ -9,5 +9,5 @@ public interface JourneyService {
 
 	JourneySessionResponse createJourney(JourneyCreateRequest request);
 
-	JourneySessionResponse cancelJourney(UUID journeyId);
+	JourneySessionResponse cancelJourney(UUID journeyId, UUID anonymousKey);
 }

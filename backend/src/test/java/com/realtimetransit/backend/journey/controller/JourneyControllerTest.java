@@ -43,27 +43,30 @@ class JourneyControllerTest {
 	@Test
 	void exposesJourneyLifecycleEndpointsWithResponseDto() throws Exception {
 		UUID journeyId = UUID.randomUUID();
+		UUID anonymousKey = UUID.randomUUID();
 		when(journeyService.createJourney(any(JourneyCreateRequest.class)))
 				.thenReturn(JourneySessionResponse.builder().journeyId(journeyId).status("ACTIVE").build());
-		when(journeyLocationService.addLocation(any(UUID.class), any(JourneyLocationCreateRequest.class)))
+		when(journeyLocationService.addLocation(any(UUID.class), any(UUID.class), any(JourneyLocationCreateRequest.class)))
 				.thenReturn(JourneyLocationResponse.builder().locationObservationId(10L).journeyId(journeyId).build());
-		when(boardingDecisionService.calculateDecision(journeyId))
+		when(boardingDecisionService.calculateDecision(journeyId, anonymousKey))
 				.thenReturn(BoardingDecisionResponse.builder()
 						.journeyId(journeyId).decision("NO_VEHICLE").vehicles(List.of()).build());
-		when(journeyService.cancelJourney(journeyId))
+		when(journeyService.cancelJourney(journeyId, anonymousKey))
 				.thenReturn(JourneySessionResponse.builder().journeyId(journeyId).status("CANCELLED").build());
 
 		mockMvc.perform(post("/api/v1/journeys")
+				.header("X-Anonymous-Key", anonymousKey)
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("""
 						{"anonymousKey":"%s","lineId":"%s","directionId":"%s","boardingStopId":"%s"}
-						""".formatted(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID())))
+						""".formatted(anonymousKey, UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID())))
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.success").value(true))
 				.andExpect(jsonPath("$.data.journeyId").value(journeyId.toString()))
 				.andExpect(jsonPath("$.data.status").value("ACTIVE"));
 
 		mockMvc.perform(post("/api/v1/journeys/{journeyId}/locations", journeyId)
+				.header("X-Anonymous-Key", anonymousKey)
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("""
 						{"latitude":37.5,"longitude":127.0,"accuracyM":10,"observedAt":"%s"}
@@ -71,12 +74,14 @@ class JourneyControllerTest {
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.data.locationObservationId").value(10));
 
-		mockMvc.perform(get("/api/v1/journeys/{journeyId}/decision", journeyId))
+		mockMvc.perform(get("/api/v1/journeys/{journeyId}/decision", journeyId)
+				.header("X-Anonymous-Key", anonymousKey))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.success").value(true))
 				.andExpect(jsonPath("$.data.decision").value("NO_VEHICLE"));
 
-		mockMvc.perform(delete("/api/v1/journeys/{journeyId}", journeyId))
+		mockMvc.perform(delete("/api/v1/journeys/{journeyId}", journeyId)
+				.header("X-Anonymous-Key", anonymousKey))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.status").value("CANCELLED"));
 	}
@@ -84,10 +89,12 @@ class JourneyControllerTest {
 	@Test
 	void convertsBusinessExceptionToCommonFailureResponse() throws Exception {
 		UUID journeyId = UUID.randomUUID();
-		when(boardingDecisionService.calculateDecision(journeyId))
+		UUID anonymousKey = UUID.randomUUID();
+		when(boardingDecisionService.calculateDecision(journeyId, anonymousKey))
 				.thenThrow(new BusinessException(ErrorCode.JOURNEY_NOT_FOUND, "journeyId=" + journeyId));
 
-		mockMvc.perform(get("/api/v1/journeys/{journeyId}/decision", journeyId))
+		mockMvc.perform(get("/api/v1/journeys/{journeyId}/decision", journeyId)
+				.header("X-Anonymous-Key", anonymousKey))
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.success").value(false))
 				.andExpect(jsonPath("$.code").value("JOURNEY_NOT_FOUND"));
@@ -95,8 +102,21 @@ class JourneyControllerTest {
 
 	@Test
 	void rejectsMalformedJourneyUuid() throws Exception {
-		mockMvc.perform(get("/api/v1/journeys/not-a-uuid/decision"))
+		mockMvc.perform(get("/api/v1/journeys/not-a-uuid/decision")
+				.header("X-Anonymous-Key", UUID.randomUUID()))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+	}
+
+	@Test
+	void rejectsJourneyCreationWhenHeaderAndBodyIdentityDiffer() throws Exception {
+		mockMvc.perform(post("/api/v1/journeys")
+				.header("X-Anonymous-Key", UUID.randomUUID())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"anonymousKey":"%s","lineId":"%s","directionId":"%s","boardingStopId":"%s"}
+						""".formatted(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID())))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("INVALID_JOURNEY_REQUEST"));
 	}
 }

@@ -7,5 +7,5 @@ import com.realtimetransit.backend.journey.dto.response.JourneyLocationResponse;
 
 public interface JourneyLocationService {
 
-	JourneyLocationResponse addLocation(UUID journeyId, JourneyLocationCreateRequest request);
+	JourneyLocationResponse addLocation(UUID journeyId, UUID anonymousKey, JourneyLocationCreateRequest request);
 }

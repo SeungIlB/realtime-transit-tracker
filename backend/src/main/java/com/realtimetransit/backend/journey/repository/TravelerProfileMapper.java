@@ -1,6 +1,7 @@
 package com.realtimetransit.backend.journey.repository;
 
 import java.util.Optional;
+import java.time.Instant;
 import java.util.UUID;
 
 import org.apache.ibatis.annotations.Mapper;
@@ -16,4 +17,10 @@ public interface TravelerProfileMapper {
 	Optional<TravelerProfileEntity> findById(@Param("id") UUID id);
 
 	Optional<TravelerProfileEntity> findByAnonymousKey(@Param("anonymousKey") UUID anonymousKey);
+
+	UUID lockById(@Param("id") UUID id);
+
+	int deleteUnusedProfilesBefore(
+			@Param("retainedAfter") Instant retainedAfter,
+			@Param("limit") int limit);
 }
