@@ -25,7 +25,6 @@ public interface TransitStopMapper {
 
 	List<DestinationStopEntity> findDestinationsAfterBoardingStop(
 			@Param("lineId") UUID lineId,
-			@Param("directionId") UUID directionId,
 			@Param("boardingStopId") UUID boardingStopId);
 
 	Optional<Boolean> canReachAlightingBeforeTerminal(

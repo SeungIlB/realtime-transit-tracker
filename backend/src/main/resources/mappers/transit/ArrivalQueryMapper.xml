@@ -158,7 +158,6 @@
                    AND alighting_sps.dropoff_allowed = TRUE
                    AND alighting_sps.stop_sequence <![CDATA[ > ]]> boarding_sps.stop_sequence
             WHERE vro.line_id = #{lineId}
-			  AND vro.direction_id = #{directionId}
               AND apo.boarding_stop_id = #{boardingStopId}
               AND apo.expected_at <![CDATA[ >= ]]> #{asOf}
               AND apo.observed_at <![CDATA[ >= ]]> #{observedAfter}

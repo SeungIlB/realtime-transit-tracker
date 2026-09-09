@@ -22,7 +22,6 @@ public interface ArrivalQueryMapper {
 
 	List<UpcomingArrivalEntity> findUpcomingArrivalsByLineIdAndBoardingStopIdAndAlightingStopId(
 			@Param("lineId") UUID lineId,
-			@Param("directionId") UUID directionId,
 			@Param("boardingStopId") UUID boardingStopId,
 			@Param("alightingStopId") UUID alightingStopId,
 			@Param("asOf") Instant asOf,

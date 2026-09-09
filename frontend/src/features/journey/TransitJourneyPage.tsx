@@ -393,7 +393,7 @@ export function TransitJourneyPage() {
     retry: provider === 'NATIONAL_PRECISION_BUS' ? false : 1,
   })
   const stopQuery = useQuery({ queryKey: ['directed-stops', selectedLine?.id], queryFn: ({ signal }) => fetchDirectedStops(selectedLine!.id, signal), enabled: selectedLine !== null })
-  const destinationQuery = useQuery({ queryKey: ['destination-stops', selectedLine?.id, boardingStop?.directionId, boardingStop?.stopId], queryFn: ({ signal }) => fetchDestinationStops(selectedLine!.id, boardingStop!.directionId, boardingStop!.stopId, signal), enabled: selectedLine !== null && boardingStop !== null })
+  const destinationQuery = useQuery({ queryKey: ['destination-stops', selectedLine?.id, boardingStop?.stopId], queryFn: ({ signal }) => fetchDestinationStops(selectedLine!.id, boardingStop!.directionId, boardingStop!.stopId, signal), enabled: selectedLine !== null && boardingStop !== null })
   const placeQueryResult = useQuery({ queryKey: ['place-search', submittedPlaceQuery], queryFn: ({ signal }) => searchPlaces(submittedPlaceQuery, signal), enabled: submittedPlaceQuery.length > 0, staleTime: Infinity, retry: 1 })
   const decisionQuery = useQuery({
     queryKey: ['boarding-decision', journeyId],
@@ -437,7 +437,10 @@ export function TransitJourneyPage() {
   const healthStatus = healthQuery.isPending ? 'checking' : healthQuery.isError ? 'offline' : 'live'
   const stopsWithCoordinates = (stopQuery.data ?? []).filter((stop) => stop.latitude !== null && stop.longitude !== null)
   const hasStopCoordinates = stopsWithCoordinates.length > 0
-  const sortedBoardingStops = [...(stopQuery.data ?? [])]
+  const uniqueBoardingStops = Array.from(
+    new Map((stopQuery.data ?? []).map((stop) => [stop.stopId, stop])).values(),
+  )
+  const sortedBoardingStops = uniqueBoardingStops
     .filter((stop) => includesStopQuery(stop, boardingStopQuery))
     .sort((left, right) => location && hasStopCoordinates
       ? distanceMeters(location, left) - distanceMeters(location, right)
@@ -562,7 +565,7 @@ export function TransitJourneyPage() {
       const journey = await createJourney({
         anonymousKey: getAnonymousKey(),
         lineId: selectedLine.id,
-        directionId: boardingStop.directionId,
+        directionId: alightingStop?.directionId ?? boardingStop.directionId,
         boardingStopId: boardingStop.stopId,
         alightingStopId: alightingStop?.stopId ?? null,
         targetProbability: null,
@@ -663,12 +666,12 @@ export function TransitJourneyPage() {
           <header className="section-header"><span>3</span><div><h2 id="boarding-heading">어디서 타나요?</h2><p>{boardingStopOrderCopy}</p></div></header>
           {selectedLine && stopQuery.isPending ? <QueryState message="정류장을 불러오고 있어요." /> : null}
           {stopQuery.isError ? <QueryState message="정류장을 불러오지 못했어요." action="다시 시도" onAction={() => stopQuery.refetch()} /> : null}
-          {stopQuery.data?.length ? <TextField variant="box" label="승차 정류장 검색" labelOption="sustain" id="boarding-stop-query" name="boardingStopQuery" type="search" value={boardingStopQuery} onChange={(event) => setBoardingStopQuery(event.target.value)} placeholder="정류장 이름, 방향 또는 순번" autoComplete="off" /> : null}
+          {stopQuery.data?.length ? <TextField variant="box" label="승차 정류장 검색" labelOption="sustain" id="boarding-stop-query" name="boardingStopQuery" type="search" value={boardingStopQuery} onChange={(event) => setBoardingStopQuery(event.target.value)} placeholder="정류장 이름 또는 순번" autoComplete="off" /> : null}
           {stopQuery.data?.length && sortedBoardingStops.length === 0 ? <QueryState message={`“${boardingStopQuery.trim()}”과 일치하는 정류장이 없어요.`} /> : null}
           {sortedBoardingStops.length ? <ul className="selection-list stop-list" aria-label="승차 정류장">{sortedBoardingStops.map((stop, index) => {
             const distance = location ? distanceMeters(location, stop) : Number.POSITIVE_INFINITY
-            const selected = boardingStop?.directionId === stop.directionId && boardingStop.stopSequence === stop.stopSequence
-            return <li key={`${stop.directionId}-${stop.stopSequence}`}><button type="button" data-selected={selected} onClick={() => selectBoardingStop(stop)}><span className="stop-sequence">{String(stop.stopSequence).padStart(2, '0')}</span><span className="list-copy"><strong>{stop.stopName}</strong><small>{stop.displayDirection ?? stop.directionName}{Number.isFinite(distance) ? ` · ${formatDistance(distance)}` : ''}{index === 0 && location && Number.isFinite(distance) ? ' · 가장 가까움' : ''}</small></span><span className="select-mark" aria-hidden="true">{selected ? '✓' : '›'}</span></button></li>
+            const selected = boardingStop?.stopId === stop.stopId
+            return <li key={stop.stopId}><button type="button" data-selected={selected} onClick={() => selectBoardingStop(stop)}><span className="stop-sequence">{String(stop.stopSequence).padStart(2, '0')}</span><span className="list-copy"><strong>{stop.stopName}</strong><small>목적지를 선택하면 방향을 자동으로 찾아요{Number.isFinite(distance) ? ` · ${formatDistance(distance)}` : ''}{index === 0 && location && Number.isFinite(distance) ? ' · 가장 가까움' : ''}</small></span><span className="select-mark" aria-hidden="true">{selected ? '✓' : '›'}</span></button></li>
           })}</ul> : null}
         </section>
 
@@ -678,8 +681,8 @@ export function TransitJourneyPage() {
           {destinationQuery.isError ? <QueryState message="하차 정류장을 불러오지 못했어요." action="다시 시도" onAction={() => destinationQuery.refetch()} /> : null}
           {destinationQuery.data?.length ? <TextField variant="box" label="하차 정류장 검색" labelOption="sustain" id="alighting-stop-query" name="alightingStopQuery" type="search" value={alightingStopQuery} onChange={(event) => setAlightingStopQuery(event.target.value)} placeholder="정류장 이름 또는 순번" autoComplete="off" /> : null}
           {filteredAlightingStops.length ? <ul className="selection-list stop-list" aria-label="하차 정류장">{filteredAlightingStops.map((stop) => {
-            const selected = alightingStop?.directionId === stop.directionId && alightingStop.stopSequence === stop.stopSequence
-            return <li key={`${stop.directionId}-${stop.stopSequence}`}><button type="button" data-selected={selected} onClick={() => { endActiveJourney(); setAlightingStop(stop) }}><span className="stop-sequence">{String(stop.stopSequence).padStart(2, '0')}</span><span className="list-copy"><strong>{stop.stopName}</strong><small>{stop.directionName}</small></span><span className="select-mark" aria-hidden="true">{selected ? '✓' : '›'}</span></button></li>
+            const selected = alightingStop?.stopId === stop.stopId
+            return <li key={stop.stopId}><button type="button" data-selected={selected} onClick={() => { endActiveJourney(); setAlightingStop(stop) }}><span className="stop-sequence">{String(stop.stopSequence).padStart(2, '0')}</span><span className="list-copy"><strong>{stop.stopName}</strong><small>이곳에 정차하는 차량만 비교해요</small></span><span className="select-mark" aria-hidden="true">{selected ? '✓' : '›'}</span></button></li>
           })}</ul> : null}
         </section>
 

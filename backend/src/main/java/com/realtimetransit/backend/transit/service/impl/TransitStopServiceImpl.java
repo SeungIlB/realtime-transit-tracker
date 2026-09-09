@@ -39,13 +39,11 @@ public class TransitStopServiceImpl implements TransitStopService {
 	@Override
 	public List<DestinationStopResponse> findDestinationsAfterBoardingStop(
 			UUID lineId,
-			UUID directionId,
 			UUID boardingStopId) {
 		validateRequiredId(lineId, "lineId");
-		validateRequiredId(directionId, "directionId");
 		validateRequiredId(boardingStopId, "boardingStopId");
 
-		return transitStopMapper.findDestinationsAfterBoardingStop(lineId, directionId, boardingStopId).stream()
+		return transitStopMapper.findDestinationsAfterBoardingStop(lineId, boardingStopId).stream()
 				.map(DestinationStopResponse::from)
 				.toList();
 	}

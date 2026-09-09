@@ -163,7 +163,7 @@ public class BoardingDecisionServiceImpl implements BoardingDecisionService {
 					observedAfter, ARRIVAL_LIMIT);
 		}
 		return arrivalQueryMapper.findUpcomingArrivalsByLineIdAndBoardingStopIdAndAlightingStopId(
-				journey.getLineId(), journey.getDirectionId(), journey.getBoardingStopId(), journey.getAlightingStopId(), calculatedAt,
+				journey.getLineId(), journey.getBoardingStopId(), journey.getAlightingStopId(), calculatedAt,
 				observedAfter, ARRIVAL_LIMIT);
 	}
 

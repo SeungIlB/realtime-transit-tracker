@@ -228,11 +228,49 @@ class TransitLineMapperIntegrationTest {
 						null, null, reversedVehicleObservationId, stop.getId(),
 						receivedAt.plusSeconds(30), null, null, 1, "CALCULATED", "HIGH",
 						receivedAt, receivedAt));
+		UUID sharedCorridorPatternId = UUID.randomUUID();
+		stopPatternMapper.upsertStopPattern(new StopPatternEntity(
+				sharedCorridorPatternId, line.getId(), "shared-corridor-pattern", "LOCAL",
+				LocalDate.parse("2026-09-01"), null, true, null, null));
+		stopPatternMapper.upsertStopPatternStops(List.of(
+				new StopPatternStopEntity(sharedCorridorPatternId, 1, stop.getId(), true, false),
+				new StopPatternStopEntity(sharedCorridorPatternId, 2, destinationStop.getId(), false, true)));
+		long sharedCorridorVehicleObservationId = vehicleRunObservationMapper.insertVehicleRunObservation(
+				VehicleRunObservationEntity.builder()
+						.lineId(line.getId())
+						.directionId(duplicateDisplayDirectionId)
+						.stopPatternId(sharedCorridorPatternId)
+						.providerVehicleId("vehicle-shared-corridor")
+						.serviceType("LOCAL")
+						.movementStatus("APPROACHING")
+						.positionSource("STOP_SEQUENCE")
+						.observedAt(receivedAt)
+						.receivedAt(receivedAt)
+						.build());
+		arrivalPredictionObservationMapper.insertArrivalPredictionObservation(
+				ArrivalPredictionObservationEntity.builder()
+						.vehicleRunObservationId(sharedCorridorVehicleObservationId)
+						.boardingStopId(stop.getId())
+						.requestedAlightingStopId(destinationStop.getId())
+						.alightingStopConfirmed(true)
+						.alightingStopStatus("STOPS")
+						.expectedAt(receivedAt.plusSeconds(120))
+						.source("PROVIDER")
+						.confidence("HIGH")
+						.observedAt(receivedAt)
+						.receivedAt(receivedAt)
+						.build());
 
 		assertThat(arrivalQueryMapper.findUpcomingArrivalsByLineIdAndBoardingStopIdAndAlightingStopId(
-				line.getId(), directionId, stop.getId(), destinationStop.getId(), receivedAt,
+				line.getId(), stop.getId(), destinationStop.getId(), receivedAt,
 				receivedAt.minusSeconds(120), 2))
 				.satisfiesExactly(
+						sharedCorridorVehicle -> {
+							assertThat(sharedCorridorVehicle.getProviderVehicleId())
+									.isEqualTo("vehicle-shared-corridor");
+							assertThat(sharedCorridorVehicle.getExpectedAt())
+									.isEqualTo(receivedAt.plusSeconds(120));
+						},
 						firstVehicle -> {
 							assertThat(firstVehicle.getProviderVehicleId()).isEqualTo("vehicle-1");
 							assertThat(firstVehicle.getExpectedAt()).isEqualTo(receivedAt.plusSeconds(300));
@@ -352,7 +390,7 @@ class TransitLineMapperIntegrationTest {
 						.build());
 
 		assertThat(arrivalQueryMapper.findUpcomingArrivalsByLineIdAndBoardingStopIdAndAlightingStopId(
-				line.getId(), directionId, stop.getId(), destinationStop.getId(), receivedAt,
+				line.getId(), stop.getId(), destinationStop.getId(), receivedAt,
 				receivedAt.minusSeconds(30), 10))
 				.extracting(UpcomingArrivalEntity::getProviderVehicleId)
 				.contains("express-confirmed")
@@ -484,10 +522,14 @@ class TransitLineMapperIntegrationTest {
 		assertThat(transitStopMapper.findActiveStopsByLineId(line.getId()))
 				.extracting(directedStop -> directedStop.getStopSequence())
 				.containsExactly(1, 2);
+		assertThat(transitStopMapper.findDestinationsAfterBoardingStop(line.getId(), stop.getId()))
+				.singleElement()
+				.extracting(destination -> destination.getStopId())
+				.isEqualTo(destinationStop.getId());
 		routeDirectionMapper.upsertRouteDirection(new RouteDirectionEntity(
 				duplicateDisplayDirectionId, line.getId(), "outbound-branch", stop.getId(),
 				destinationStop.getId(), destinationStop.getId(), "종점 방면", false, null, null));
-		assertThat(transitStopMapper.findDestinationsAfterBoardingStop(line.getId(), directionId, stop.getId()))
+		assertThat(transitStopMapper.findDestinationsAfterBoardingStop(line.getId(), stop.getId()))
 				.singleElement()
 				.satisfies(destination -> {
 					assertThat(destination.getDirectionId()).isEqualTo(directionId);

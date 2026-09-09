@@ -43,7 +43,7 @@ public class ArrivalServiceImpl implements ArrivalService {
 		validateRequiredId(alightingStopId, "alightingStopId");
 		Instant asOf = clock.instant();
 		Instant observedAfter = asOf.minus(arrivalProperties.getObservationFreshness());
-		var storedArrivals = findArrivals(lineId, directionId, boardingStopId, alightingStopId, asOf, observedAfter);
+		var storedArrivals = findArrivals(lineId, boardingStopId, alightingStopId, asOf, observedAfter);
 		if (hasRecentlyCollectedArrival(storedArrivals, asOf)) {
 			return storedArrivals.stream().map(UpcomingArrivalResponse::from).toList();
 		}
@@ -55,7 +55,7 @@ public class ArrivalServiceImpl implements ArrivalService {
 			}
 			throw exception;
 		}
-		var refreshedArrivals = findArrivals(lineId, directionId, boardingStopId, alightingStopId, asOf, observedAfter);
+		var refreshedArrivals = findArrivals(lineId, boardingStopId, alightingStopId, asOf, observedAfter);
 		var arrivals = refreshedArrivals.isEmpty() ? storedArrivals : refreshedArrivals;
 		return arrivals.stream()
 				.map(UpcomingArrivalResponse::from)
@@ -72,13 +72,12 @@ public class ArrivalServiceImpl implements ArrivalService {
 
 	private List<UpcomingArrivalEntity> findArrivals(
 			UUID lineId,
-			UUID directionId,
 			UUID boardingStopId,
 			UUID alightingStopId,
 			Instant asOf,
 			Instant observedAfter) {
 		return arrivalQueryMapper.findUpcomingArrivalsByLineIdAndBoardingStopIdAndAlightingStopId(
-				lineId, directionId, boardingStopId, alightingStopId, asOf, observedAfter, UPCOMING_ARRIVAL_LIMIT);
+				lineId, boardingStopId, alightingStopId, asOf, observedAfter, UPCOMING_ARRIVAL_LIMIT);
 	}
 
 	private static void validateRequiredId(UUID value, String fieldName) {

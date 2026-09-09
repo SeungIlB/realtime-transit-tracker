@@ -116,7 +116,6 @@
 			INNER JOIN directed_stop boarding
 				ON boarding.direction_id = rd.id
 			WHERE rd.line_id = #{lineId}
-			  AND rd.id = #{directionId}
 			  AND boarding.stop_id = #{boardingStopId}
 			  AND rd.active = TRUE
 			GROUP BY rd.id
@@ -127,9 +126,12 @@
             destination.stop_id AS "stopId",
             destination_stop.public_name AS "stopName",
 			destination.stop_sequence AS "stopSequence",
+			destination.stop_sequence - boarding.stop_sequence AS "stopsAfterBoarding",
 			ROW_NUMBER() OVER (
-				PARTITION BY rd.id, destination.stop_id
-				ORDER BY destination.stop_sequence
+				PARTITION BY destination.stop_id
+				ORDER BY destination.stop_sequence - boarding.stop_sequence,
+				         rd.display_name,
+				         rd.id
 			) AS occurrence
         FROM route_direction rd
 		INNER JOIN boarding_position boarding
@@ -138,8 +140,7 @@
 			ON destination.direction_id = rd.id
         INNER JOIN transit_stop destination_stop
             ON destination_stop.id = destination.stop_id
-        WHERE rd.line_id = #{lineId}
-		  AND rd.id = #{directionId}
+		WHERE rd.line_id = #{lineId}
           AND rd.active = TRUE
           AND destination.stop_sequence > boarding.stop_sequence
 		  AND destination.stop_id != #{boardingStopId}
@@ -147,7 +148,7 @@
 		SELECT "directionId", "directionName", "stopId", "stopName", "stopSequence"
 		FROM ranked_destinations
 		WHERE occurrence = 1
-		ORDER BY "directionName", "stopSequence" ASC
+		ORDER BY "stopsAfterBoarding", "stopName" ASC
     </select>
 
 	<select id="canReachAlightingBeforeTerminal" resultType="boolean">

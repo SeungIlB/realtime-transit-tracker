@@ -58,7 +58,7 @@ class ArrivalServiceImplTest {
 		UUID alightingStopId = UUID.randomUUID();
 		UUID currentStopId = UUID.randomUUID();
 		when(arrivalQueryMapper.findUpcomingArrivalsByLineIdAndBoardingStopIdAndAlightingStopId(
-				lineId, directionId, boardingStopId, alightingStopId, NOW, NOW.minusSeconds(120), 2))
+				lineId, boardingStopId, alightingStopId, NOW, NOW.minusSeconds(120), 2))
 				.thenReturn(List.of(UpcomingArrivalEntity.builder()
 						.arrivalPredictionId(1L)
 						.vehicleRunObservationId(2L)
@@ -89,7 +89,7 @@ class ArrivalServiceImplTest {
 					assertThat(response.getCurrentStopName()).isEqualTo("이전 정류장");
 				});
 		verify(arrivalQueryMapper).findUpcomingArrivalsByLineIdAndBoardingStopIdAndAlightingStopId(
-				lineId, directionId, boardingStopId, alightingStopId, NOW, NOW.minusSeconds(120), 2);
+				lineId, boardingStopId, alightingStopId, NOW, NOW.minusSeconds(120), 2);
 		verifyNoInteractions(externalCollectionService);
 	}
 
@@ -100,7 +100,7 @@ class ArrivalServiceImplTest {
 		UUID boardingStopId = UUID.randomUUID();
 		UUID alightingStopId = UUID.randomUUID();
 		when(arrivalQueryMapper.findUpcomingArrivalsByLineIdAndBoardingStopIdAndAlightingStopId(
-				lineId, directionId, boardingStopId, alightingStopId, NOW, NOW.minusSeconds(120), 2))
+				lineId, boardingStopId, alightingStopId, NOW, NOW.minusSeconds(120), 2))
 				.thenReturn(List.of());
 
 		assertThat(arrivalService.findUpcomingArrivals(lineId, directionId, boardingStopId, alightingStopId))

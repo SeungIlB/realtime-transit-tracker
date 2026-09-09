@@ -106,7 +106,7 @@ class BoardingDecisionServiceImplTest {
 	void retriesCollectionAndReturnsNoVehicleAsNormalState() {
 		JourneySessionEntity journey = stubPredictionInputs();
 		when(arrivalQueryMapper.findUpcomingArrivalsByLineIdAndBoardingStopIdAndAlightingStopId(
-				journey.getLineId(), journey.getDirectionId(), journey.getBoardingStopId(), journey.getAlightingStopId(), NOW,
+				journey.getLineId(), journey.getBoardingStopId(), journey.getAlightingStopId(), NOW,
 				NOW.minusSeconds(120), 2)).thenReturn(List.of(), List.of());
 
 		var response = service.calculateDecision(journey.getId());
@@ -136,7 +136,7 @@ class BoardingDecisionServiceImplTest {
 				.receivedAt(NOW.minusSeconds(3))
 				.build();
 		when(arrivalQueryMapper.findUpcomingArrivalsByLineIdAndBoardingStopIdAndAlightingStopId(
-				journey.getLineId(), journey.getDirectionId(), journey.getBoardingStopId(), journey.getAlightingStopId(), NOW,
+				journey.getLineId(), journey.getBoardingStopId(), journey.getAlightingStopId(), NOW,
 				NOW.minusSeconds(120), 2)).thenReturn(List.of(arrival));
 
 		var response = service.calculateDecision(journey.getId());

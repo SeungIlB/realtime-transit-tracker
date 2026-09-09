@@ -12,6 +12,5 @@ public interface TransitStopService {
 
 	List<DestinationStopResponse> findDestinationsAfterBoardingStop(
 			UUID lineId,
-			UUID directionId,
 			UUID boardingStopId);
 }
