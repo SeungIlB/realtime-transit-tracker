@@ -7,7 +7,6 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -24,7 +23,6 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 
 @Component
-@ConditionalOnBean(ApiRateLimitService.class)
 @ConditionalOnProperty(name = "app.security.enabled", havingValue = "true", matchIfMissing = true)
 @Order(Ordered.HIGHEST_PRECEDENCE + 10)
 @RequiredArgsConstructor

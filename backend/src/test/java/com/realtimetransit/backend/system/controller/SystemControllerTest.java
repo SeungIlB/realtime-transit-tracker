@@ -16,9 +16,11 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.realtimetransit.backend.common.config.WebCorsConfig;
+import com.realtimetransit.backend.common.security.ApiRateLimitService;
 
 @WebMvcTest(
 		value = SystemController.class,
@@ -26,6 +28,7 @@ import com.realtimetransit.backend.common.config.WebCorsConfig;
 )
 @Import({SystemControllerTest.FixedClockConfig.class, WebCorsConfig.class})
 class SystemControllerTest {
+	@MockitoBean private ApiRateLimitService apiRateLimitService;
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -34,6 +37,7 @@ class SystemControllerTest {
 	void returnsApplicationHealth() throws Exception {
 		mockMvc.perform(get("/api/v1/system/health"))
 				.andExpect(status().isOk())
+				.andExpect(header().string("X-Content-Type-Options", "nosniff"))
 				.andExpect(jsonPath("$.success").value(true))
 				.andExpect(jsonPath("$.code").value("SUCCESS"))
 				.andExpect(jsonPath("$.data.status").value("UP"))
