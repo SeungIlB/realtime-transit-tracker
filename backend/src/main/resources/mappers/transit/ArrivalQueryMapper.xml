@@ -21,6 +21,7 @@
             <result property="movementStatus" column="movementStatus" />
             <result property="currentStopId" column="currentStopId" />
             <result property="currentStopName" column="currentStopName" />
+            <result property="destinationStopName" column="destinationStopName" />
             <result property="currentSequence" column="currentSequence" />
             <result property="latitude" column="latitude" />
             <result property="longitude" column="longitude" />
@@ -49,6 +50,7 @@
                 vro.movement_status AS "movementStatus",
                 vro.current_stop_id AS "currentStopId",
                 current_stop.public_name AS "currentStopName",
+                destination_stop.public_name AS "destinationStopName",
                 vro.current_sequence AS "currentSequence",
                 vro.latitude AS "latitude",
                 vro.longitude AS "longitude",
@@ -73,6 +75,8 @@
                    AND boarding_sps.pickup_allowed = TRUE
             LEFT JOIN transit_stop current_stop
                    ON current_stop.id = vro.current_stop_id
+            LEFT JOIN transit_stop destination_stop
+                   ON destination_stop.id = vro.destination_stop_id
             WHERE vro.line_id = #{lineId}
 			  AND vro.direction_id = #{directionId}
               AND apo.boarding_stop_id = #{boardingStopId}
@@ -96,6 +100,7 @@
             "movementStatus",
             "currentStopId",
             "currentStopName",
+            "destinationStopName",
             "currentSequence",
             "latitude",
             "longitude",
@@ -128,6 +133,7 @@
                 vro.movement_status AS "movementStatus",
                 vro.current_stop_id AS "currentStopId",
                 current_stop.public_name AS "currentStopName",
+                destination_stop.public_name AS "destinationStopName",
                 vro.current_sequence AS "currentSequence",
                 vro.latitude AS "latitude",
                 vro.longitude AS "longitude",
@@ -152,6 +158,8 @@
                    AND boarding_sps.pickup_allowed = TRUE
             LEFT JOIN transit_stop current_stop
                    ON current_stop.id = vro.current_stop_id
+            LEFT JOIN transit_stop destination_stop
+                   ON destination_stop.id = vro.destination_stop_id
             INNER JOIN stop_pattern_stop alighting_sps
                     ON alighting_sps.stop_pattern_id = vro.stop_pattern_id
                    AND alighting_sps.stop_id = #{alightingStopId}
@@ -184,6 +192,7 @@
             "movementStatus",
             "currentStopId",
             "currentStopName",
+            "destinationStopName",
             "currentSequence",
             "latitude",
             "longitude",

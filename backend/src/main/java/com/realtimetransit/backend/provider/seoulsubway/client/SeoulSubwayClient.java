@@ -5,9 +5,12 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -37,6 +40,7 @@ import com.realtimetransit.backend.provider.client.dto.ExternalTransitLine;
 public class SeoulSubwayClient extends ProviderClientSupport implements TransitProviderClient {
 	private static final Pattern REMAINING_STOPS_PATTERN = Pattern.compile("\\[(\\d+)]번째 전역");
 	private static final long FALLBACK_SECONDS_PER_STOP = 120L;
+	private static final long BOARDING_DWELL_GRACE_SECONDS = 30L;
 	private static final List<String> LINES = List.of(
 			"01호선", "02호선", "03호선", "04호선", "05호선", "06호선", "07호선", "08호선", "09호선",
 			"경강선", "경의선", "경춘선", "공항철도", "서해선", "수인분당선", "신림선",
@@ -44,15 +48,18 @@ public class SeoulSubwayClient extends ProviderClientSupport implements TransitP
 	private final RestClient realtimeClient;
 	private final String realtimeServiceKey;
 	private final SeoulSubwayReferenceClient referenceClient;
+	private final SeoulSubwayPositionClient positionClient;
 	private final Clock clock;
 
 	public SeoulSubwayClient(RestClient.Builder builder, ExternalApiQuotaService quotaService,
-			TransitProviderProperties properties, SeoulSubwayReferenceClient referenceClient, Clock clock) {
+			TransitProviderProperties properties, SeoulSubwayReferenceClient referenceClient,
+			SeoulSubwayPositionClient positionClient, Clock clock) {
 		super(quotaService);
 		var config = properties.getSeoulSubway();
 		this.realtimeClient = builder.clone().baseUrl(config.getBaseUrl()).build();
 		this.realtimeServiceKey = config.getServiceKey();
 		this.referenceClient = referenceClient;
+		this.positionClient = positionClient;
 		this.clock = clock;
 	}
 
@@ -420,7 +427,160 @@ public class SeoulSubwayClient extends ProviderClientSupport implements TransitP
 					.movementStatus(movementStatus(arrivalCode))
 					.positionSource("STOP_SEQUENCE").observedAt(observedAt).build());
 		});
-		return result;
+		try {
+			return supplementWithPositions(
+					result,
+					positionClient.findPositions(displayName(providerLineId)),
+					fetchRoute(providerLineId).getDirections(),
+					lineStations,
+					providerStopId,
+					receivedAt);
+		} catch (BusinessException exception) {
+			return result;
+		}
+	}
+
+	static List<ExternalArrival> supplementWithPositions(
+			List<ExternalArrival> arrivals,
+			List<JsonNode> positions,
+			List<ExternalDirection> directions,
+			List<JsonNode> lineStations,
+			String boardingStopId,
+			Instant receivedAt) {
+		List<ExternalArrival> supplemented = new ArrayList<>(arrivals);
+		Set<String> vehicleIds = new HashSet<>();
+		arrivals.stream()
+				.filter(arrival -> arrival.getProviderVehicleId() != null)
+				.map(ExternalArrival::getProviderVehicleId)
+				.forEach(vehicleIds::add);
+		latestPositionsByVehicle(positions).values().stream()
+				.map(position -> positionArrival(
+						position, directions, lineStations, boardingStopId, receivedAt))
+				.filter(java.util.Objects::nonNull)
+				.filter(arrival -> vehicleIds.add(arrival.getProviderVehicleId()))
+				.forEach(supplemented::add);
+		return List.copyOf(supplemented);
+	}
+
+	private static Map<String, JsonNode> latestPositionsByVehicle(List<JsonNode> positions) {
+		Map<String, JsonNode> latest = new LinkedHashMap<>();
+		for (JsonNode position : positions) {
+			String vehicleId = text(position, "trainNo");
+			if (vehicleId == null) continue;
+			JsonNode previous = latest.get(vehicleId);
+			if (previous == null
+					|| fallback(text(position, "recptnDt"), "")
+							.compareTo(fallback(text(previous, "recptnDt"), "")) > 0) {
+				latest.put(vehicleId, position);
+			}
+		}
+		return latest;
+	}
+
+	private static ExternalArrival positionArrival(
+			JsonNode position,
+			List<ExternalDirection> directions,
+			List<JsonNode> lineStations,
+			String boardingStopId,
+			Instant receivedAt) {
+		String vehicleId = text(position, "trainNo");
+		String currentStopId = stationIdByName(lineStations, text(position, "statnNm"));
+		String destinationStopId = stationIdByName(lineStations, text(position, "statnTnm"));
+		PositionPath path = findPositionPath(
+				directions,
+				positionDirectionId(text(position, "updnLine")),
+				currentStopId,
+				boardingStopId,
+				destinationStopId);
+		if (vehicleId == null || path == null) return null;
+		Instant observedAt = koreaInstant(text(position, "recptnDt"), "yyyy-MM-dd HH:mm:ss");
+		if (observedAt == null) observedAt = receivedAt;
+		Instant expectedAt = path.remainingStops() == 0 && isEnteringOrArrived(text(position, "trainSttus"))
+				? receivedAt.plusSeconds(BOARDING_DWELL_GRACE_SECONDS)
+				: observedAt.plusSeconds(path.remainingStops() * FALLBACK_SECONDS_PER_STOP);
+		return ExternalArrival.builder()
+				.providerVehicleId(vehicleId)
+				.providerRunId(vehicleId)
+				.providerDirectionId(path.directionId())
+				.serviceType(positionServiceType(text(position, "directAt")))
+				.destinationProviderStopId(destinationStopId)
+				.currentProviderStopId(currentStopId)
+				.expectedAt(expectedAt)
+				.remainingStops(path.remainingStops())
+				.movementStatus(positionMovementStatus(text(position, "trainSttus")))
+				.positionSource("STOP_SEQUENCE")
+				.confidence("MEDIUM")
+				.observedAt(observedAt)
+				.build();
+	}
+
+	private static PositionPath findPositionPath(
+			List<ExternalDirection> directions,
+			String directionId,
+			String currentStopId,
+			String boardingStopId,
+			String destinationStopId) {
+		if (directionId == null || currentStopId == null || destinationStopId == null) return null;
+		PositionPath best = null;
+		for (ExternalDirection direction : directions) {
+			if (!(direction.getProviderDirectionId().equals(directionId)
+					|| direction.getProviderDirectionId().startsWith(directionId + ":"))) continue;
+			List<ExternalStop> stops = direction.getStops();
+			for (int current = 0; current < stops.size(); current++) {
+				if (!currentStopId.equals(stops.get(current).getProviderStopId())) continue;
+				for (int boarding = current; boarding < stops.size(); boarding++) {
+					if (!boardingStopId.equals(stops.get(boarding).getProviderStopId())) continue;
+					for (int destination = boarding + 1; destination < stops.size(); destination++) {
+						if (!destinationStopId.equals(stops.get(destination).getProviderStopId())) continue;
+						PositionPath candidate = new PositionPath(
+								direction.getProviderDirectionId(), boarding - current);
+						if (best == null || candidate.remainingStops() < best.remainingStops()) {
+							best = candidate;
+						}
+					}
+				}
+			}
+		}
+		return best;
+	}
+
+	private static String stationIdByName(List<JsonNode> lineStations, String stationName) {
+		String normalized = normalizeStationName(stationName);
+		if (normalized == null) return null;
+		return lineStations.stream()
+				.filter(station -> normalized.equals(normalizeStationName(text(station, "STATION_NM"))))
+				.map(station -> text(station, "STATION_CD"))
+				.findFirst()
+				.orElse(null);
+	}
+
+	private static String positionDirectionId(String value) {
+		return switch (value == null ? "" : value) {
+			case "0" -> "UP";
+			case "1" -> "DOWN";
+			default -> directionId(value);
+		};
+	}
+
+	private static String positionServiceType(String directAt) {
+		return switch (directAt == null ? "" : directAt) {
+			case "1" -> "EXPRESS";
+			case "7" -> "RAPID";
+			default -> "LOCAL";
+		};
+	}
+
+	private static String positionMovementStatus(String trainStatus) {
+		return switch (trainStatus == null ? "" : trainStatus) {
+			case "0" -> "APPROACHING";
+			case "1" -> "ARRIVED";
+			case "2" -> "DEPARTED";
+			case "3" -> "BETWEEN";
+			default -> "UNKNOWN";
+		};
+	}
+
+	private record PositionPath(String directionId, int remainingStops) {
 	}
 
 	static String destinationProviderStopId(JsonNode arrival, List<JsonNode> lineStations) {
@@ -453,10 +613,18 @@ public class SeoulSubwayClient extends ProviderClientSupport implements TransitP
 		Integer effectiveRemainingStops = remainingStops != null
 				? remainingStops
 				: remainingStops(null, arrivalCode);
+		if (effectiveRemainingStops != null && effectiveRemainingStops == 0
+				&& isEnteringOrArrived(arrivalCode)) {
+			return receivedAt.plusSeconds(BOARDING_DWELL_GRACE_SECONDS);
+		}
 		if (effectiveRemainingStops != null && effectiveRemainingStops > 0) {
 			return observedAt.plusSeconds(effectiveRemainingStops * FALLBACK_SECONDS_PER_STOP);
 		}
 		return providerExpectedAt;
+	}
+
+	private static boolean isEnteringOrArrived(String status) {
+		return "0".equals(status) || "1".equals(status);
 	}
 
 	static Integer remainingStops(String arrivalMessage) {

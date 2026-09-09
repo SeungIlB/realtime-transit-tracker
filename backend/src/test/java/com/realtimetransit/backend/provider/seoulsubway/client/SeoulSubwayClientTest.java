@@ -8,6 +8,8 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+import com.realtimetransit.backend.provider.client.dto.ExternalArrival;
+
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -15,14 +17,25 @@ class SeoulSubwayClientTest {
 	private final ObjectMapper objectMapper = new ObjectMapper();
 
 	@Test
-	void doesNotReviveAnApproachingTrainWhoseEtaIsAlreadyPast() {
+	void keepsAnEnteringTrainBoardableForAShortGracePeriod() {
 		Instant observedAt = Instant.parse("2026-09-03T05:35:05Z");
 		Instant receivedAt = Instant.parse("2026-09-03T05:36:01Z");
 
 		Instant expectedAt = SeoulSubwayClient.arrivalExpectedAt(
 				"0", observedAt, 0, null, receivedAt);
 
-		assertThat(expectedAt).isEqualTo(observedAt);
+		assertThat(expectedAt).isEqualTo(receivedAt.plusSeconds(30));
+	}
+
+	@Test
+	void keepsAnArrivedTrainBoardableForAShortGracePeriod() {
+		Instant observedAt = Instant.parse("2026-09-03T05:35:05Z");
+		Instant receivedAt = Instant.parse("2026-09-03T05:36:01Z");
+
+		Instant expectedAt = SeoulSubwayClient.arrivalExpectedAt(
+				"1", observedAt, 0, null, receivedAt);
+
+		assertThat(expectedAt).isEqualTo(receivedAt.plusSeconds(30));
 	}
 
 	@Test
@@ -149,6 +162,44 @@ class SeoulSubwayClientTest {
 				.containsExactly("시청", "을지로입구", "성수", "시청", "을지로입구", "성수");
 		assertThat(branch.getStops()).extracting(stop -> stop.getPublicName())
 				.containsExactly("성수", "용답", "신답");
+	}
+
+	@Test
+	void supplementsACloserTrainMissingFromStationArrivals() throws Exception {
+		List<JsonNode> stations = List.of(
+				station("126", "신설동", "0156"),
+				station("131", "종각", "0131"),
+				station("132", "시청", "0132"),
+				station("141", "구로", "0141"),
+				station("142", "구일", "0142"),
+				station("161", "인천", "0161"));
+		var directions = SeoulSubwayClient.oneLineDirections(stations, new HashMap<>(), new HashMap<>());
+		List<ExternalArrival> arrivals = List.of(ExternalArrival.builder()
+				.providerVehicleId("0079")
+				.build());
+		List<JsonNode> positions = List.of(
+				objectMapper.readTree("""
+						{"trainNo":"0079","statnNm":"시청","statnTnm":"인천","updnLine":"1",
+						 "trainSttus":"1","directAt":"0","recptnDt":"2026-09-09 10:34:20"}
+						"""),
+				objectMapper.readTree("""
+						{"trainNo":"0081","statnNm":"신설동","statnTnm":"인천","updnLine":"1",
+						 "trainSttus":"1","directAt":"0","recptnDt":"2026-09-09 10:34:15"}
+						"""),
+				objectMapper.readTree("""
+						{"trainNo":"0073","statnNm":"구로","statnTnm":"인천","updnLine":"1",
+						 "trainSttus":"1","directAt":"0","recptnDt":"2026-09-09 10:34:10"}
+						"""));
+
+		List<ExternalArrival> supplemented = SeoulSubwayClient.supplementWithPositions(
+				arrivals, positions, directions, stations, "0132", Instant.parse("2026-09-09T01:34:30Z"));
+
+		assertThat(supplemented).extracting(ExternalArrival::getProviderVehicleId)
+				.containsExactly("0079", "0081");
+		ExternalArrival added = supplemented.get(1);
+		assertThat(added.getProviderDirectionId()).isEqualTo("DOWN:INCHEON");
+		assertThat(added.getRemainingStops()).isEqualTo(2);
+		assertThat(added.getExpectedAt()).isEqualTo(Instant.parse("2026-09-09T01:38:15Z"));
 	}
 
 	@Test

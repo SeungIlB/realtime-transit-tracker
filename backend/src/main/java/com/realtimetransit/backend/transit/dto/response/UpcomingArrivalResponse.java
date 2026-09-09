@@ -34,6 +34,7 @@ public class UpcomingArrivalResponse {
 	private String movementStatus;
 	private UUID currentStopId;
 	private String currentStopName;
+	private String destinationStopName;
 	private Integer currentSequence;
 	private BigDecimal latitude;
 	private BigDecimal longitude;
@@ -58,6 +59,7 @@ public class UpcomingArrivalResponse {
 				.movementStatus(entity.getMovementStatus())
 				.currentStopId(entity.getCurrentStopId())
 				.currentStopName(entity.getCurrentStopName())
+				.destinationStopName(entity.getDestinationStopName())
 				.currentSequence(entity.getCurrentSequence())
 				.latitude(entity.getLatitude())
 				.longitude(entity.getLongitude())

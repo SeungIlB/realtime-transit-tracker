@@ -32,6 +32,7 @@ public class UpcomingArrivalEntity {
 	private String movementStatus;
 	private UUID currentStopId;
 	private String currentStopName;
+	private String destinationStopName;
 	private Integer currentSequence;
 	private BigDecimal latitude;
 	private BigDecimal longitude;
