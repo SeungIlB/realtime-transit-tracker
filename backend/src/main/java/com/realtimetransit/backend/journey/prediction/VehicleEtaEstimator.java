@@ -18,7 +18,7 @@ public class VehicleEtaEstimator {
 	private final JourneyProperties properties;
 
 	public VehicleEtaEstimate estimate(UpcomingArrivalEntity arrival, Instant calculatedAt) {
-		Instant expectedAt = arrival.getExpectedAt();
+		Instant expectedAt = expectedAt(arrival, calculatedAt);
 		Instant minExpectedAt = arrival.getMinExpectedAt() != null
 				? arrival.getMinExpectedAt()
 				: expectedAt.minus(properties.getDefaultVehicleEtaUncertainty());
@@ -35,6 +35,18 @@ public class VehicleEtaEstimator {
 				.expectedAt(expectedAt)
 				.maxExpectedAt(maxExpectedAt)
 				.build();
+	}
+
+	private Instant expectedAt(UpcomingArrivalEntity arrival, Instant calculatedAt) {
+		Instant providerExpectedAt = arrival.getExpectedAt();
+		if (!providerExpectedAt.isBefore(calculatedAt)) {
+			return providerExpectedAt;
+		}
+		Integer remainingStops = arrival.getRemainingStops();
+		if (remainingStops != null && remainingStops > 0) {
+			return calculatedAt.plus(properties.getDefaultVehicleStopTravelTime().multipliedBy(remainingStops));
+		}
+		return calculatedAt;
 	}
 
 	private Instant earliest(Instant first, Instant second) {

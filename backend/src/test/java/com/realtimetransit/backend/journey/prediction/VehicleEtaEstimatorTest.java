@@ -44,9 +44,40 @@ class VehicleEtaEstimatorTest {
 		assertThat(estimate.getMaxExpectedAt()).isEqualTo(NOW.plusSeconds(65));
 	}
 
+	@Test
+	void recalculatesExpiredProviderEtaFromRemainingStops() {
+		VehicleEtaEstimator estimator = estimator();
+		UpcomingArrivalEntity arrival = UpcomingArrivalEntity.builder()
+				.expectedAt(NOW.minusSeconds(30))
+				.remainingStops(3)
+				.build();
+
+		VehicleEtaEstimate estimate = estimator.estimate(arrival, NOW);
+
+		assertThat(estimate.getExpectedAt()).isEqualTo(NOW.plusSeconds(360));
+		assertThat(estimate.getMinExpectedAt()).isEqualTo(NOW.plusSeconds(315));
+		assertThat(estimate.getMaxExpectedAt()).isEqualTo(NOW.plusSeconds(405));
+	}
+
+	@Test
+	void clampsExpiredProviderEtaAtCurrentTimeWhenVehicleIsAtBoardingStop() {
+		VehicleEtaEstimator estimator = estimator();
+		UpcomingArrivalEntity arrival = UpcomingArrivalEntity.builder()
+				.expectedAt(NOW.minusSeconds(30))
+				.remainingStops(0)
+				.build();
+
+		VehicleEtaEstimate estimate = estimator.estimate(arrival, NOW);
+
+		assertThat(estimate.getExpectedAt()).isEqualTo(NOW);
+		assertThat(estimate.getMinExpectedAt()).isEqualTo(NOW);
+		assertThat(estimate.getMaxExpectedAt()).isEqualTo(NOW.plusSeconds(45));
+	}
+
 	private VehicleEtaEstimator estimator() {
 		JourneyProperties properties = new JourneyProperties();
 		properties.setDefaultVehicleEtaUncertainty(Duration.ofSeconds(45));
+		properties.setDefaultVehicleStopTravelTime(Duration.ofMinutes(2));
 		return new VehicleEtaEstimator(properties);
 	}
 }

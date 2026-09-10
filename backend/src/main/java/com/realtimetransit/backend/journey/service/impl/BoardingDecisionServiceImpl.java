@@ -177,8 +177,14 @@ public class BoardingDecisionServiceImpl implements BoardingDecisionService {
 		return calculations.stream()
 				.min(Comparator
 						.comparingInt(this::requiredEffort)
+						.thenComparingInt(this::remainingStops)
 						.thenComparing(calculation -> calculation.getVehicleEta().getExpectedAt()))
 				.orElseThrow();
+	}
+
+	private int remainingStops(VehicleCalculation calculation) {
+		Integer remainingStops = calculation.getArrival().getRemainingStops();
+		return remainingStops == null ? Integer.MAX_VALUE : remainingStops;
 	}
 
 	private int requiredEffort(VehicleCalculation calculation) {

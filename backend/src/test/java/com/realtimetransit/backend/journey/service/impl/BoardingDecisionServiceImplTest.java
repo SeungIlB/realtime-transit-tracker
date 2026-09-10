@@ -177,6 +177,38 @@ class BoardingDecisionServiceImplTest {
 				journey.getLineId(), journey.getBoardingStopId(), journey.getAlightingStopId());
 	}
 
+	@Test
+	void prefersVehicleWithFewerRemainingStopsWhenEffortIsEqual() {
+		JourneySessionEntity journey = stubPredictionInputs();
+		UpcomingArrivalEntity earlierEta = UpcomingArrivalEntity.builder()
+				.arrivalPredictionId(30L)
+				.vehicleRunObservationId(40L)
+				.providerVehicleId("four-stops-away")
+				.remainingStops(4)
+				.expectedAt(NOW.plusSeconds(180))
+				.confidence("HIGH")
+				.observedAt(NOW)
+				.receivedAt(NOW)
+				.build();
+		UpcomingArrivalEntity fewerStops = UpcomingArrivalEntity.builder()
+				.arrivalPredictionId(31L)
+				.vehicleRunObservationId(41L)
+				.providerVehicleId("one-stop-away")
+				.remainingStops(1)
+				.expectedAt(NOW.plusSeconds(300))
+				.confidence("HIGH")
+				.observedAt(NOW)
+				.receivedAt(NOW)
+				.build();
+		when(arrivalQueryMapper.findUpcomingArrivalsByLineIdAndBoardingStopIdAndAlightingStopId(
+				journey.getLineId(), journey.getBoardingStopId(), journey.getAlightingStopId(), NOW,
+				NOW.minusSeconds(120), 2)).thenReturn(List.of(earlierEta, fewerStops));
+
+		var response = service.calculateDecision(journey.getId(), ANONYMOUS_KEY);
+
+		assertThat(response.getRecommendedVehicleId()).isEqualTo("one-stop-away");
+	}
+
 	private JourneySessionEntity stubPredictionInputs() {
 		JourneySessionEntity journey = journey();
 		TravelerLocationObservationEntity location = TravelerLocationObservationEntity.builder()
@@ -226,6 +258,7 @@ class BoardingDecisionServiceImplTest {
 		value.setDeparturePreparationTime(Duration.ofSeconds(10));
 		value.setBoardingBuffer(Duration.ofSeconds(15));
 		value.setDefaultVehicleEtaUncertainty(Duration.ofSeconds(45));
+		value.setDefaultVehicleStopTravelTime(Duration.ofMinutes(2));
 		value.setPredictionTtl(Duration.ofMinutes(2));
 		value.setDecisionRefreshInterval(Duration.ofSeconds(20));
 		value.setFreshLocationThreshold(Duration.ofSeconds(30));

@@ -30,6 +30,37 @@
         
     </resultMap>
 
+    <sql id="approachingBoardingStopExpression">
+        (
+            current_sps.stop_sequence IS NULL
+            OR current_sps.stop_sequence <![CDATA[ <= ]]> boarding_sps.stop_sequence
+        )
+        AND NOT (
+            vro.movement_status = 'DEPARTED'
+            AND (
+                apo.remaining_stops = 0
+                OR current_sps.stop_sequence = boarding_sps.stop_sequence
+            )
+        )
+        AND (
+            apo.expected_at <![CDATA[ >= ]]> CAST(#{asOf} AS TIMESTAMPTZ)
+            OR apo.remaining_stops > 0
+            OR (
+                apo.remaining_stops = 0
+                AND vro.movement_status != 'DEPARTED'
+            )
+            OR (
+                apo.remaining_stops IS NULL
+                AND current_sps.stop_sequence <![CDATA[ <= ]]> boarding_sps.stop_sequence
+            )
+            OR (
+                apo.remaining_stops IS NULL
+                AND current_sps.stop_sequence IS NULL
+                AND apo.expected_at <![CDATA[ >= ]]> CAST(#{observedAfter} AS TIMESTAMPTZ)
+            )
+        )
+    </sql>
+
     <select id="findUpcomingArrivalsByLineIdAndBoardingStopId"
             resultMap="upcomingArrivalMap">
         WITH ranked_arrivals AS (
@@ -56,6 +87,7 @@
                 vro.longitude AS "longitude",
                 apo.observed_at AS "observedAt",
                 apo.received_at AS "receivedAt",
+                (<include refid="approachingBoardingStopExpression" />) AS "isApproachingBoardingStop",
                 ROW_NUMBER() OVER (
                     PARTITION BY vro.provider_vehicle_id
                     ORDER BY apo.observed_at DESC,
@@ -65,10 +97,6 @@
             FROM arrival_prediction_observation apo
             INNER JOIN vehicle_run_observation vro
                     ON vro.id = apo.vehicle_run_observation_id
-            INNER JOIN transit_line tl
-                    ON tl.id = vro.line_id
-            INNER JOIN transit_provider tp
-                    ON tp.id = tl.provider_id
             INNER JOIN stop_pattern_stop boarding_sps
                     ON boarding_sps.stop_pattern_id = vro.stop_pattern_id
                    AND boarding_sps.stop_id = apo.boarding_stop_id
@@ -77,14 +105,12 @@
                    ON current_stop.id = vro.current_stop_id
             LEFT JOIN transit_stop destination_stop
                    ON destination_stop.id = vro.destination_stop_id
+            LEFT JOIN stop_pattern_stop current_sps
+                   ON current_sps.stop_pattern_id = vro.stop_pattern_id
+                  AND current_sps.stop_id = vro.current_stop_id
             WHERE vro.line_id = #{lineId}
 			  AND vro.direction_id = #{directionId}
               AND apo.boarding_stop_id = #{boardingStopId}
-              AND apo.expected_at <![CDATA[ >= ]]>
-                  CASE WHEN tp.transport_type = 'SUBWAY'
-                       THEN CAST(#{observedAfter} AS TIMESTAMPTZ)
-                       ELSE CAST(#{asOf} AS TIMESTAMPTZ)
-                  END
               AND apo.observed_at <![CDATA[ >= ]]> #{observedAfter}
         )
         SELECT
@@ -112,7 +138,9 @@
             "receivedAt"
         FROM ranked_arrivals
         WHERE "rowNumber" = 1
-        ORDER BY "expectedAt" ASC,
+          AND "isApproachingBoardingStop"
+        ORDER BY COALESCE("remainingStops", 2147483647) ASC,
+                 "expectedAt" ASC,
                  "providerVehicleId" ASC
         LIMIT #{limit}
     </select>
@@ -143,6 +171,7 @@
                 vro.longitude AS "longitude",
                 apo.observed_at AS "observedAt",
                 apo.received_at AS "receivedAt",
+                (<include refid="approachingBoardingStopExpression" />) AS "isApproachingBoardingStop",
                 ROW_NUMBER() OVER (
                     PARTITION BY vro.provider_vehicle_id
                     ORDER BY apo.observed_at DESC,
@@ -152,10 +181,6 @@
             FROM arrival_prediction_observation apo
             INNER JOIN vehicle_run_observation vro
                     ON vro.id = apo.vehicle_run_observation_id
-            INNER JOIN transit_line tl
-                    ON tl.id = vro.line_id
-            INNER JOIN transit_provider tp
-                    ON tp.id = tl.provider_id
             INNER JOIN stop_pattern_stop boarding_sps
                     ON boarding_sps.stop_pattern_id = vro.stop_pattern_id
                    AND boarding_sps.stop_id = apo.boarding_stop_id
@@ -164,6 +189,9 @@
                    ON current_stop.id = vro.current_stop_id
             LEFT JOIN transit_stop destination_stop
                    ON destination_stop.id = vro.destination_stop_id
+            LEFT JOIN stop_pattern_stop current_sps
+                   ON current_sps.stop_pattern_id = vro.stop_pattern_id
+                  AND current_sps.stop_id = vro.current_stop_id
             INNER JOIN stop_pattern_stop alighting_sps
                     ON alighting_sps.stop_pattern_id = vro.stop_pattern_id
                    AND alighting_sps.stop_id = #{alightingStopId}
@@ -171,11 +199,6 @@
                    AND alighting_sps.stop_sequence <![CDATA[ > ]]> boarding_sps.stop_sequence
             WHERE vro.line_id = #{lineId}
               AND apo.boarding_stop_id = #{boardingStopId}
-              AND apo.expected_at <![CDATA[ >= ]]>
-                  CASE WHEN tp.transport_type = 'SUBWAY'
-                       THEN CAST(#{observedAfter} AS TIMESTAMPTZ)
-                       ELSE CAST(#{asOf} AS TIMESTAMPTZ)
-                  END
               AND apo.observed_at <![CDATA[ >= ]]> #{observedAfter}
               AND (
                     apo.requested_alighting_stop_id IS NULL
@@ -208,7 +231,9 @@
             "receivedAt"
         FROM ranked_arrivals
         WHERE "rowNumber" = 1
-        ORDER BY "expectedAt" ASC,
+          AND "isApproachingBoardingStop"
+        ORDER BY COALESCE("remainingStops", 2147483647) ASC,
+                 "expectedAt" ASC,
                  "providerVehicleId" ASC
         LIMIT #{limit}
     </select>

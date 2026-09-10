@@ -265,16 +265,16 @@ class TransitLineMapperIntegrationTest {
 				line.getId(), stop.getId(), destinationStop.getId(), receivedAt,
 				receivedAt.minusSeconds(120), 2))
 				.satisfiesExactly(
+						firstVehicle -> {
+							assertThat(firstVehicle.getProviderVehicleId()).isEqualTo("vehicle-1");
+							assertThat(firstVehicle.getExpectedAt()).isEqualTo(receivedAt.plusSeconds(300));
+							assertThat(firstVehicle.getConfidence()).isEqualTo("HIGH");
+						},
 						sharedCorridorVehicle -> {
 							assertThat(sharedCorridorVehicle.getProviderVehicleId())
 									.isEqualTo("vehicle-shared-corridor");
 							assertThat(sharedCorridorVehicle.getExpectedAt())
 									.isEqualTo(receivedAt.plusSeconds(120));
-						},
-						firstVehicle -> {
-							assertThat(firstVehicle.getProviderVehicleId()).isEqualTo("vehicle-1");
-							assertThat(firstVehicle.getExpectedAt()).isEqualTo(receivedAt.plusSeconds(300));
-							assertThat(firstVehicle.getConfidence()).isEqualTo("HIGH");
 						});
 
 		assertThat(arrivalQueryMapper.findUpcomingArrivalsByLineIdAndBoardingStopId(
@@ -396,12 +396,12 @@ class TransitLineMapperIntegrationTest {
 				.contains("express-confirmed")
 				.doesNotContain("express-unconfirmed", "express-unknown");
 
-		long delayedSubwayVehicleId = vehicleRunObservationMapper.insertVehicleRunObservation(
+		long delayedApproachingVehicleId = vehicleRunObservationMapper.insertVehicleRunObservation(
 				VehicleRunObservationEntity.builder()
 						.lineId(line.getId())
 						.directionId(directionId)
 						.stopPatternId(arrivalPatternId)
-						.providerVehicleId("delayed-subway")
+						.providerVehicleId("delayed-approaching")
 						.serviceType("LOCAL")
 						.movementStatus("APPROACHING")
 						.positionSource("STOP_SEQUENCE")
@@ -410,12 +410,13 @@ class TransitLineMapperIntegrationTest {
 						.build());
 		arrivalPredictionObservationMapper.insertArrivalPredictionObservation(
 				ArrivalPredictionObservationEntity.builder()
-						.vehicleRunObservationId(delayedSubwayVehicleId)
+						.vehicleRunObservationId(delayedApproachingVehicleId)
 						.boardingStopId(stop.getId())
 						.requestedAlightingStopId(destinationStop.getId())
 						.alightingStopConfirmed(true)
 						.alightingStopStatus("STOPS")
-						.expectedAt(receivedAt.minusSeconds(90))
+						.expectedAt(receivedAt.minusSeconds(121))
+						.remainingStops(3)
 						.source("PROVIDER")
 						.confidence("MEDIUM")
 						.observedAt(receivedAt)
@@ -425,36 +426,61 @@ class TransitLineMapperIntegrationTest {
 		assertThat(arrivalQueryMapper.findUpcomingArrivalsByLineIdAndBoardingStopId(
 				line.getId(), directionId, stop.getId(), receivedAt, receivedAt.minusSeconds(120), 20))
 				.extracting(UpcomingArrivalEntity::getProviderVehicleId)
-				.contains("delayed-subway");
+				.contains("delayed-approaching");
 		assertThat(arrivalQueryMapper.findUpcomingArrivalsByLineIdAndBoardingStopIdAndAlightingStopId(
 				line.getId(), stop.getId(), destinationStop.getId(), receivedAt,
 				receivedAt.minusSeconds(120), 20))
 				.extracting(UpcomingArrivalEntity::getProviderVehicleId)
-				.contains("delayed-subway");
+				.contains("delayed-approaching");
 		jdbcTemplate.update("UPDATE transit_line SET provider_id = ? WHERE id = ?", providerId, line.getId());
 		assertThat(arrivalQueryMapper.findUpcomingArrivalsByLineIdAndBoardingStopId(
 				line.getId(), directionId, stop.getId(), receivedAt, receivedAt.minusSeconds(120), 20))
 				.extracting(UpcomingArrivalEntity::getProviderVehicleId)
-				.doesNotContain("delayed-subway");
+				.contains("delayed-approaching");
 		assertThat(arrivalQueryMapper.findUpcomingArrivalsByLineIdAndBoardingStopIdAndAlightingStopId(
 				line.getId(), stop.getId(), destinationStop.getId(), receivedAt,
 				receivedAt.minusSeconds(120), 20))
 				.extracting(UpcomingArrivalEntity::getProviderVehicleId)
-				.doesNotContain("delayed-subway");
+				.contains("delayed-approaching");
 
 		jdbcTemplate.update("UPDATE transit_line SET provider_id = ? WHERE id = ?", subwayProviderIdForArrival, line.getId());
-		jdbcTemplate.update(
-				"UPDATE arrival_prediction_observation SET expected_at = ? WHERE vehicle_run_observation_id = ?",
-				java.sql.Timestamp.from(receivedAt.minusSeconds(121)), delayedSubwayVehicleId);
+		long departedVehicleId = vehicleRunObservationMapper.insertVehicleRunObservation(
+				VehicleRunObservationEntity.builder()
+						.lineId(line.getId())
+						.directionId(directionId)
+						.stopPatternId(arrivalPatternId)
+						.providerVehicleId("delayed-approaching")
+						.currentStopId(stop.getId())
+						.currentSequence(1)
+						.serviceType("LOCAL")
+						.movementStatus("DEPARTED")
+						.positionSource("STOP_SEQUENCE")
+						.observedAt(receivedAt.plusSeconds(1))
+						.receivedAt(receivedAt.plusSeconds(1))
+						.build());
+		arrivalPredictionObservationMapper.insertArrivalPredictionObservation(
+				ArrivalPredictionObservationEntity.builder()
+						.vehicleRunObservationId(departedVehicleId)
+						.boardingStopId(stop.getId())
+						.requestedAlightingStopId(destinationStop.getId())
+						.alightingStopConfirmed(true)
+						.alightingStopStatus("STOPS")
+						.expectedAt(receivedAt.plusSeconds(60))
+						.remainingStops(0)
+						.source("PROVIDER")
+						.confidence("HIGH")
+						.observedAt(receivedAt.plusSeconds(1))
+						.receivedAt(receivedAt.plusSeconds(1))
+						.build());
 		assertThat(arrivalQueryMapper.findUpcomingArrivalsByLineIdAndBoardingStopId(
-				line.getId(), directionId, stop.getId(), receivedAt, receivedAt.minusSeconds(120), 20))
+				line.getId(), directionId, stop.getId(), receivedAt.plusSeconds(1), receivedAt.minusSeconds(119), 20))
 				.extracting(UpcomingArrivalEntity::getProviderVehicleId)
-				.doesNotContain("delayed-subway");
+				.doesNotContain("delayed-approaching");
 		assertThat(arrivalQueryMapper.findUpcomingArrivalsByLineIdAndBoardingStopIdAndAlightingStopId(
-				line.getId(), stop.getId(), destinationStop.getId(), receivedAt,
-				receivedAt.minusSeconds(120), 20))
+				line.getId(), stop.getId(), destinationStop.getId(), receivedAt.plusSeconds(1),
+				receivedAt.minusSeconds(119), 20))
 				.extracting(UpcomingArrivalEntity::getProviderVehicleId)
-				.doesNotContain("delayed-subway");
+				.doesNotContain("delayed-approaching");
 		jdbcTemplate.update("UPDATE transit_line SET provider_id = ? WHERE id = ?", providerId, line.getId());
 
 		vehicleRunObservationMapper.insertVehicleRunObservation(new VehicleRunObservationEntity(

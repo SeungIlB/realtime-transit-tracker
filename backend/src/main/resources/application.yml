@@ -76,6 +76,7 @@ journey:
   departure-preparation-time: 10s
   boarding-buffer: 15s
   default-vehicle-eta-uncertainty: 45s
+  default-vehicle-stop-travel-time: 2m
   prediction-ttl: 2m
   decision-refresh-interval: 1m
   fresh-location-threshold: 30s
