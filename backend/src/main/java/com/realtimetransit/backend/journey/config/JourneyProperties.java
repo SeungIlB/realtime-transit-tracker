@@ -23,6 +23,8 @@ public class JourneyProperties {
 	private Duration boardingBuffer;
 	private Duration defaultVehicleEtaUncertainty;
 	private Duration defaultVehicleStopTravelTime;
+	private BigDecimal routeTimingUncertaintyRatio;
+	private Duration routeMinimumTimingUncertainty;
 	private Duration predictionTtl;
 	private Duration decisionRefreshInterval;
 	private Duration freshLocationThreshold;

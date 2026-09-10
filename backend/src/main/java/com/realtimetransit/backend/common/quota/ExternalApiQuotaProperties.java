@@ -19,6 +19,7 @@ public class ExternalApiQuotaProperties {
 	private long gbisDailyLimit;
 	private long nationalPrecisionBusDailyLimit;
 	private long railwayTimetableDailyLimit;
+	private long kakaoPublicTransitDailyLimit;
 
 	public long dailyLimit(ExternalApiProvider provider) {
 		return switch (provider) {
@@ -26,6 +27,7 @@ public class ExternalApiQuotaProperties {
 			case GBIS -> gbisDailyLimit;
 			case NATIONAL_PRECISION_BUS -> nationalPrecisionBusDailyLimit;
 			case RAILWAY_TIMETABLE -> railwayTimetableDailyLimit;
+			case KAKAO_PUBLIC_TRANSIT -> kakaoPublicTransitDailyLimit;
 		};
 	}
 }

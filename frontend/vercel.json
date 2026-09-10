@@ -5,7 +5,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; connect-src 'self' https://realtime-transit-backend.onrender.com https://nominatim.openstreetmap.org; img-src 'self' data:; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'"
+          "value": "default-src 'self'; connect-src 'self' https://realtime-transit-backend.onrender.com https://nominatim.openstreetmap.org https://dapi.kakao.com https://*.naver.com https://*.pstatic.net; img-src 'self' data: https://*.naver.com https://*.pstatic.net; script-src 'self' https://oapi.map.naver.com; style-src 'self' 'unsafe-inline'; font-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'"
         },
         {
           "key": "Permissions-Policy",

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties, FormEvent, PointerEvent as ReactPointerEvent } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Button, TextField } from '../../components/ui'
 import { ApiError, getAnonymousKey } from '../../api/client'
 import { searchPlaces, type PlaceSearchResult } from '../../api/geocoding'
@@ -23,6 +23,9 @@ import {
   type TransitLine,
   type TransitProvider,
 } from '../../api/transit'
+import { TransitMapPanel } from './TransitMapPanel'
+import { TransitRouteFinder, type SuggestedTransitLeg } from './TransitRouteFinder'
+import { findUniqueLine, findUniqueStopPair, normalizeLineName, normalizeStopName } from './routeMatching'
 
 const steps = ['위치', '노선', '정류장', '판단']
 const providerOptions: Array<{
@@ -47,6 +50,11 @@ type LocationSnapshot = {
 }
 
 type JourneyUiState = 'idle' | 'starting' | 'tracking' | 'error'
+
+type SuggestedMatchStatus = {
+  state: 'loading' | 'matched' | 'choice'
+  message: string
+}
 
 type BoardingAccess = {
   distanceM: number
@@ -305,14 +313,16 @@ function Timeline({ vehicle, pace }: { vehicle: VehicleBoardingPrediction; pace:
   )
 }
 
-function DecisionPanel({ decision, routeStops, access, boardingStopName, locationAccuracyM, onStop }: {
+function DecisionPanel({ decision, routeStops, access, boardingStop, location, locationAccuracyM, onStop }: {
   decision: BoardingDecision
   routeStops: DirectedStop[]
   access: BoardingAccess | null
-  boardingStopName: string | null
+  boardingStop: DirectedStop
+  location: LocationSnapshot
   locationAccuracyM?: number
   onStop: () => void
 }) {
+  const boardingStopName = boardingStop.stopName
   const copy = decision.decision === 'UNLIKELY' && access?.isRemote
     ? {
         title: '승차역까지 너무 멀어요',
@@ -345,6 +355,7 @@ function DecisionPanel({ decision, routeStops, access, boardingStopName, locatio
           </div>
         </dl>
       </div>
+      <TransitMapPanel location={location} boardingStop={boardingStop} routeStops={routeStops} vehicles={decision.vehicles} recommendedVehicleId={decision.recommendedVehicleId} />
       {selectedVehicle && selectedPace ? <Timeline vehicle={selectedVehicle} pace={selectedPace} /> : null}
       {decision.vehicles.length ? (
         <>
@@ -381,6 +392,7 @@ function MobilePageActions({
 }
 
 export function TransitJourneyPage() {
+  const queryClient = useQueryClient()
   const [location, setLocation] = useState<LocationSnapshot | null>(null)
   const [locationStatus, setLocationStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
   const [locationError, setLocationError] = useState<string | null>(null)
@@ -402,10 +414,14 @@ export function TransitJourneyPage() {
   const [journeyError, setJourneyError] = useState<string | null>(null)
   const [healthCheckSlow, setHealthCheckSlow] = useState(false)
   const [mobilePage, setMobilePage] = useState(0)
+  const [suggestedLeg, setSuggestedLeg] = useState<SuggestedTransitLeg | null>(null)
+  const [suggestedMatchStatus, setSuggestedMatchStatus] = useState<SuggestedMatchStatus | null>(null)
   const lastUploadedLocation = useRef<string | null>(null)
   const mobileSwipeStart = useRef<{ x: number; y: number } | null>(null)
   const locationRequestInFlight = useRef(false)
   const journeyStartInFlight = useRef(false)
+  const suggestedMatchInFlight = useRef(false)
+  const suggestedMatchVersion = useRef(0)
   const cancellingJourneyIds = useRef(new Set<string>())
   const locationSource = location?.source
 
@@ -417,7 +433,7 @@ export function TransitJourneyPage() {
     retry: provider === 'NATIONAL_PRECISION_BUS' ? false : 1,
   })
   const stopQuery = useQuery({ queryKey: ['directed-stops', selectedLine?.id], queryFn: ({ signal }) => fetchDirectedStops(selectedLine!.id, signal), enabled: selectedLine !== null })
-  const destinationQuery = useQuery({ queryKey: ['destination-stops', selectedLine?.id, boardingStop?.stopId], queryFn: ({ signal }) => fetchDestinationStops(selectedLine!.id, boardingStop!.directionId, boardingStop!.stopId, signal), enabled: selectedLine !== null && boardingStop !== null })
+  const destinationQuery = useQuery({ queryKey: ['destination-stops', selectedLine?.id, boardingStop?.directionId, boardingStop?.stopId], queryFn: ({ signal }) => fetchDestinationStops(selectedLine!.id, boardingStop!.directionId, boardingStop!.stopId, signal), enabled: selectedLine !== null && boardingStop !== null })
   const placeQueryResult = useQuery({ queryKey: ['place-search', submittedPlaceQuery], queryFn: ({ signal }) => searchPlaces(submittedPlaceQuery, signal), enabled: submittedPlaceQuery.length > 0, staleTime: Infinity, retry: 1 })
   const decisionQuery = useQuery({
     queryKey: ['boarding-decision', journeyId],
@@ -486,7 +502,6 @@ export function TransitJourneyPage() {
   const maxMobilePage = journeyState !== 'idle' || journeyId || decisionQuery.data
     ? 4
     : selectedLine ? 3 : location ? 2 : 1
-
   function goToMobilePage(page: number, allowResult = false) {
     const nextPage = Math.max(0, Math.min(allowResult ? 4 : maxMobilePage, page))
     setMobilePage(nextPage)
@@ -571,6 +586,10 @@ export function TransitJourneyPage() {
 
   function changeProvider(nextProvider: TransitProvider) {
     endActiveJourney()
+    suggestedMatchVersion.current += 1
+    suggestedMatchInFlight.current = false
+    setSuggestedLeg(null)
+    setSuggestedMatchStatus(null)
     setProvider(nextProvider)
     setQueryInput('')
     setSubmittedQuery('')
@@ -587,6 +606,10 @@ export function TransitJourneyPage() {
     const nextQuery = queryInput.trim()
     if (!nextQuery || (provider === 'NATIONAL_PRECISION_BUS' && !location)) return
     endActiveJourney()
+    suggestedMatchVersion.current += 1
+    suggestedMatchInFlight.current = false
+    setSuggestedLeg(null)
+    setSuggestedMatchStatus(null)
     setSubmittedQuery(nextQuery)
     setSubmittedLineLocation(location ? { latitude: location.latitude, longitude: location.longitude } : null)
     setSelectedLine(null)
@@ -594,7 +617,7 @@ export function TransitJourneyPage() {
     setAlightingStop(null)
   }
 
-  function selectLine(line: TransitLine) {
+  function applySelectedLine(line: TransitLine) {
     endActiveJourney()
     setSelectedLine(line)
     setBoardingStop(null)
@@ -603,11 +626,114 @@ export function TransitJourneyPage() {
     setAlightingStopQuery('')
   }
 
+  function selectLine(line: TransitLine) {
+    const matchVersion = ++suggestedMatchVersion.current
+    suggestedMatchInFlight.current = false
+    applySelectedLine(line)
+    if (suggestedLeg) void matchSuggestedStops(line, suggestedLeg, matchVersion)
+  }
+
   function selectBoardingStop(stop: DirectedStop) {
+    const matchVersion = ++suggestedMatchVersion.current
+    suggestedMatchInFlight.current = false
     endActiveJourney()
     setBoardingStop(stop)
     setAlightingStop(null)
     setAlightingStopQuery('')
+    if (suggestedLeg && selectedLine) void matchSuggestedDestination(selectedLine, stop, suggestedLeg, matchVersion)
+  }
+
+  async function matchSuggestedDestination(line: TransitLine, stop: DirectedStop, leg: SuggestedTransitLeg, matchVersion: number) {
+    setSuggestedMatchStatus({ state: 'loading', message: `${leg.endName} 하차 지점을 확인하고 있어요.` })
+    try {
+      const destinations = await queryClient.fetchQuery({
+        queryKey: ['destination-stops', line.id, stop.directionId, stop.stopId],
+        queryFn: ({ signal }) => fetchDestinationStops(line.id, stop.directionId, stop.stopId, signal),
+      })
+      if (matchVersion !== suggestedMatchVersion.current) return
+      const matches = destinations.filter((destination) => normalizeStopName(destination.stopName) === normalizeStopName(leg.endName))
+      if (matches.length === 1) {
+        setAlightingStop(matches[0])
+        setSuggestedMatchStatus({ state: 'matched', message: `${stop.stopName} → ${matches[0].stopName} 구간을 자동으로 선택했어요.` })
+      } else {
+        setSuggestedMatchStatus({ state: 'choice', message: '하차 지점을 하나로 확정하지 못했어요. 아래에서 직접 선택해 주세요.' })
+      }
+    } catch {
+      if (matchVersion !== suggestedMatchVersion.current) return
+      setSuggestedMatchStatus({ state: 'choice', message: '하차 지점을 자동으로 확인하지 못했어요. 아래에서 직접 선택해 주세요.' })
+    }
+  }
+
+  async function matchSuggestedStops(line: TransitLine, leg: SuggestedTransitLeg, matchVersion: number) {
+    setSuggestedMatchStatus({ state: 'loading', message: `${leg.startName} → ${leg.endName} 방향을 확인하고 있어요.` })
+    try {
+      const stops = await queryClient.fetchQuery({
+        queryKey: ['directed-stops', line.id],
+        queryFn: ({ signal }) => fetchDirectedStops(line.id, signal),
+      })
+      if (matchVersion !== suggestedMatchVersion.current) return
+      const pair = findUniqueStopPair(stops, leg.startName, leg.endName)
+      if (!pair) {
+        setSuggestedMatchStatus({ state: 'choice', message: '같은 이름의 정류장이나 운행 방향이 여러 개예요. 구간을 직접 확인해 주세요.' })
+        return
+      }
+      setBoardingStop(pair.boarding)
+      setAlightingStop({
+        directionId: pair.alighting.directionId,
+        directionName: pair.alighting.directionName,
+        stopId: pair.alighting.stopId,
+        stopName: pair.alighting.stopName,
+        stopSequence: pair.alighting.stopSequence,
+      })
+      setSuggestedMatchStatus({ state: 'matched', message: `${pair.boarding.stopName} → ${pair.alighting.stopName} 구간을 자동으로 선택했어요.` })
+    } catch {
+      if (matchVersion !== suggestedMatchVersion.current) return
+      setSuggestedMatchStatus({ state: 'choice', message: '정류장을 자동으로 확인하지 못했어요. 아래에서 직접 선택해 주세요.' })
+    }
+  }
+
+  async function chooseSuggestedLeg(nextLeg: SuggestedTransitLeg) {
+    if (!location || suggestedMatchInFlight.current) return
+    suggestedMatchInFlight.current = true
+    const matchVersion = ++suggestedMatchVersion.current
+    endActiveJourney()
+    setSuggestedLeg(nextLeg)
+    setSuggestedMatchStatus({ state: 'loading', message: `${nextLeg.query} 노선을 자동으로 찾고 있어요.` })
+    setProvider(nextLeg.provider)
+    setQueryInput(nextLeg.query)
+    setSubmittedQuery(nextLeg.query)
+    const lineLocation = nextLeg.lineSearchLocation ?? { latitude: location.latitude, longitude: location.longitude }
+    setSubmittedLineLocation(lineLocation)
+    setSelectedLine(null)
+    setBoardingStop(null)
+    setAlightingStop(null)
+    setBoardingStopQuery('')
+    setAlightingStopQuery('')
+    try {
+      const lines = await queryClient.fetchQuery({
+        queryKey: ['transit-lines', nextLeg.provider, nextLeg.query, lineLocation.latitude, lineLocation.longitude],
+        queryFn: ({ signal }) => searchTransitLines(nextLeg.provider, nextLeg.query, lineLocation, signal),
+      })
+      if (matchVersion !== suggestedMatchVersion.current) return
+      const matchedLine = findUniqueLine(lines, nextLeg.query)
+      if (!matchedLine) {
+        const exactMatches = lines.filter((line) => normalizeLineName(line.publicName) === normalizeLineName(nextLeg.query))
+        setSuggestedMatchStatus({
+          state: 'choice',
+          message: exactMatches.length > 1
+            ? `같은 이름의 노선이 ${exactMatches.length}개예요. 아래에서 실제 노선을 선택해 주세요.`
+            : '일치하는 노선을 하나로 확정하지 못했어요. 아래에서 직접 선택해 주세요.',
+        })
+        return
+      }
+      applySelectedLine(matchedLine)
+      await matchSuggestedStops(matchedLine, nextLeg, matchVersion)
+    } catch {
+      if (matchVersion !== suggestedMatchVersion.current) return
+      setSuggestedMatchStatus({ state: 'choice', message: '노선을 자동으로 확인하지 못했어요. 아래에서 직접 검색해 주세요.' })
+    } finally {
+      if (matchVersion === suggestedMatchVersion.current) suggestedMatchInFlight.current = false
+    }
   }
 
   async function startJourney() {
@@ -742,7 +868,10 @@ export function TransitJourneyPage() {
 
         <div className="mobile-page" data-mobile-page="2" data-active={mobilePage === 2} aria-label="노선 선택">
         <section className="flow-card line-card" aria-labelledby="line-heading">
-          <header className="section-header"><span>2</span><div><h2 id="line-heading">어떤 노선을 타나요?</h2><p>버스 번호나 지하철 호선으로 찾아보세요.</p></div></header>
+          <header className="section-header"><span>2</span><div><h2 id="line-heading">어떤 노선을 타나요?</h2><p>목적지 경로에서 고르거나 노선을 직접 찾아보세요.</p></div></header>
+          {location ? <TransitRouteFinder origin={location} onChooseLeg={chooseSuggestedLeg} /> : null}
+          {suggestedMatchStatus ? <div className="route-match-status" data-state={suggestedMatchStatus.state} role="status"><span aria-hidden="true">{suggestedMatchStatus.state === 'matched' ? '✓' : suggestedMatchStatus.state === 'loading' ? '···' : '!'}</span><p>{suggestedMatchStatus.message}</p></div> : null}
+          <div className="manual-line-divider"><span>노선 직접 찾기</span></div>
           <fieldset className="provider-tabs"><legend>교통수단 선택</legend>{providerOptions.map((option) => <label key={option.value} data-selected={provider === option.value}><input type="radio" name="transitProvider" value={option.value} checked={provider === option.value} onChange={() => changeProvider(option.value)} /><span>{option.label}</span></label>)}</fieldset>
           <form className="search-form compact" onSubmit={submitSearch} role="search">
             <TextField variant="box" label={providerOption.searchLabel} labelOption="sustain" id="line-query" name="lineQuery" value={queryInput} onChange={(event) => setQueryInput(event.target.value)} placeholder={providerOption.placeholder} autoComplete="off" />
@@ -801,7 +930,7 @@ export function TransitJourneyPage() {
           {journeyError ? <QueryState message={journeyError} action={journeyId ? '다시 계산' : '다시 시작'} onAction={() => journeyId ? decisionQuery.refetch() : startJourney()} /> : null}
           {journeyId && decisionQuery.isPending ? <QueryState message="내 도착 시간과 접근 차량을 비교하고 있어요." /> : null}
           {decisionQuery.isError ? <QueryState message="최신 탑승 판단을 불러오지 못했어요." action="다시 확인" onAction={() => decisionQuery.refetch()} /> : null}
-          {decisionQuery.data ? <DecisionPanel decision={decisionQuery.data} routeStops={stopQuery.data ?? []} access={selectedBoardingAccess} boardingStopName={boardingStop?.stopName ?? null} locationAccuracyM={location?.accuracyM} onStop={endActiveJourney} /> : null}
+          {decisionQuery.data && location && boardingStop ? <DecisionPanel decision={decisionQuery.data} routeStops={stopQuery.data ?? []} access={selectedBoardingAccess} boardingStop={boardingStop} location={location} locationAccuracyM={location.accuracyM} onStop={endActiveJourney} /> : null}
         </section>
         <MobilePageActions previousLabel="구간 수정" onPrevious={() => goToMobilePage(3)} />
         </div>

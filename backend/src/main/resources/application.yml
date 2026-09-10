@@ -77,6 +77,8 @@ journey:
   boarding-buffer: 15s
   default-vehicle-eta-uncertainty: 45s
   default-vehicle-stop-travel-time: 2m
+  route-timing-uncertainty-ratio: 0.15
+  route-minimum-timing-uncertainty: 30s
   prediction-ttl: 2m
   decision-refresh-interval: 1m
   fresh-location-threshold: 30s
@@ -89,6 +91,10 @@ journey:
   default-run-speed-mps: 2.50
 
 transit:
+  routing:
+    kakao:
+      base-url: ${KAKAO_ROUTING_BASE_URL:https://dapi.kakao.com}
+      rest-api-key: ${KAKAO_REST_API_KEY:}
   arrival:
     observation-freshness: 2m
   maintenance:
@@ -100,6 +106,7 @@ transit:
     gbis-daily-limit: ${GBIS_DAILY_CALL_BUDGET:800}
     national-precision-bus-daily-limit: ${NATIONAL_PRECISION_BUS_DAILY_CALL_BUDGET:4000}
     railway-timetable-daily-limit: ${KRIC_DAILY_CALL_BUDGET:5000}
+    kakao-public-transit-daily-limit: ${KAKAO_DAILY_CALL_BUDGET:1000}
   providers:
     gbis:
       base-url: https://apis.data.go.kr

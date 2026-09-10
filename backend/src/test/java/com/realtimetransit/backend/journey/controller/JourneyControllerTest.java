@@ -30,9 +30,11 @@ import com.realtimetransit.backend.journey.dto.request.JourneyLocationCreateRequ
 import com.realtimetransit.backend.journey.dto.response.BoardingDecisionResponse;
 import com.realtimetransit.backend.journey.dto.response.JourneyLocationResponse;
 import com.realtimetransit.backend.journey.dto.response.JourneySessionResponse;
+import com.realtimetransit.backend.journey.dto.response.RouteDecisionResponse;
 import com.realtimetransit.backend.journey.service.BoardingDecisionService;
 import com.realtimetransit.backend.journey.service.JourneyLocationService;
 import com.realtimetransit.backend.journey.service.JourneyService;
+import com.realtimetransit.backend.journey.service.RouteDecisionService;
 
 @WebMvcTest(JourneyController.class)
 class JourneyControllerTest {
@@ -40,6 +42,7 @@ class JourneyControllerTest {
 	@MockitoBean private JourneyService journeyService;
 	@MockitoBean private JourneyLocationService journeyLocationService;
 	@MockitoBean private BoardingDecisionService boardingDecisionService;
+	@MockitoBean private RouteDecisionService routeDecisionService;
 	@MockitoBean private ApiRateLimitService apiRateLimitService;
 
 	@Autowired
@@ -94,6 +97,29 @@ class JourneyControllerTest {
 				.header("X-Anonymous-Key", anonymousKey))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.status").value("CANCELLED"));
+	}
+
+	@Test
+	void exposesStatelessRouteDecisionEndpoint() throws Exception {
+		UUID anonymousKey = UUID.randomUUID();
+		when(routeDecisionService.calculateRouteDecision(any(UUID.class), any()))
+				.thenReturn(RouteDecisionResponse.builder()
+						.decision("COMFORTABLE")
+						.overallProbability(new java.math.BigDecimal("0.91"))
+						.legs(List.of())
+						.build());
+
+		mockMvc.perform(post("/api/v1/journeys/route-decisions")
+				.header("X-Anonymous-Key", anonymousKey)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"latitude":37.5,"longitude":127.0,"accuracyM":10,
+						 "observedAt":"2026-09-10T01:00:00Z","legs":[]}
+						"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.success").value(true))
+				.andExpect(jsonPath("$.data.decision").value("COMFORTABLE"))
+				.andExpect(jsonPath("$.data.overallProbability").value(0.91));
 	}
 
 	@Test

@@ -18,12 +18,15 @@ import com.realtimetransit.backend.common.error.BusinessException;
 import com.realtimetransit.backend.common.error.ErrorCode;
 import com.realtimetransit.backend.journey.dto.request.JourneyCreateRequest;
 import com.realtimetransit.backend.journey.dto.request.JourneyLocationCreateRequest;
+import com.realtimetransit.backend.journey.dto.request.RouteDecisionRequest;
 import com.realtimetransit.backend.journey.dto.response.BoardingDecisionResponse;
 import com.realtimetransit.backend.journey.dto.response.JourneyLocationResponse;
 import com.realtimetransit.backend.journey.dto.response.JourneySessionResponse;
+import com.realtimetransit.backend.journey.dto.response.RouteDecisionResponse;
 import com.realtimetransit.backend.journey.service.BoardingDecisionService;
 import com.realtimetransit.backend.journey.service.JourneyLocationService;
 import com.realtimetransit.backend.journey.service.JourneyService;
+import com.realtimetransit.backend.journey.service.RouteDecisionService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -35,6 +38,14 @@ public class JourneyController {
 	private final JourneyService journeyService;
 	private final JourneyLocationService journeyLocationService;
 	private final BoardingDecisionService boardingDecisionService;
+	private final RouteDecisionService routeDecisionService;
+
+	@PostMapping("/route-decisions")
+	public ResponseDTO<RouteDecisionResponse> calculateRouteDecision(
+			@RequestHeader("X-Anonymous-Key") UUID anonymousKey,
+			@RequestBody RouteDecisionRequest request) {
+		return ResponseDTO.success(routeDecisionService.calculateRouteDecision(anonymousKey, request));
+	}
 
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)

@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 public enum ErrorCode {
 	INVALID_REQUEST(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", "Request value is invalid"),
 	INVALID_JOURNEY_REQUEST(HttpStatus.BAD_REQUEST, "INVALID_JOURNEY_REQUEST", "Journey request is invalid"),
+	INVALID_ROUTE_DECISION_REQUEST(HttpStatus.BAD_REQUEST, "INVALID_ROUTE_DECISION_REQUEST", "Route decision request is invalid"),
 	INVALID_JOURNEY_STOPS(HttpStatus.BAD_REQUEST, "INVALID_JOURNEY_STOPS", "Journey stops do not match the selected route direction"),
 	JOURNEY_NOT_FOUND(HttpStatus.NOT_FOUND, "JOURNEY_NOT_FOUND", "Journey session was not found"),
 	JOURNEY_NOT_ACTIVE(HttpStatus.CONFLICT, "JOURNEY_NOT_ACTIVE", "Journey session is not active"),

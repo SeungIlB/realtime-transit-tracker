@@ -8,6 +8,7 @@ public final class TransitCacheNames {
 	public static final String NATIONAL_BUS_LOCATIONS = "national-bus-locations";
 	public static final String TRANSIT_STATIC_DATA = "transit-static-data";
 	public static final String RAILWAY_TIMETABLE = "railway-timetable";
+	public static final String KAKAO_PUBLIC_TRANSIT = "kakao-public-transit";
 
 	private TransitCacheNames() {
 	}

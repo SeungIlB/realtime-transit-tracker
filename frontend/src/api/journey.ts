@@ -72,6 +72,56 @@ export type BoardingDecision = {
   nextRefreshAt: string
 }
 
+export type RouteTransitLegPayload = {
+  lineId: string
+  directionId: string
+  boardingStopId: string
+  alightingStopId: string
+  lineName: string
+  boardingStopName: string
+  alightingStopName: string
+  sectionTimeMinutes: number
+  transferWalkTimeMinutes: number
+}
+
+export type RouteLegDecision = {
+  legIndex: number
+  lineId: string
+  lineName: string
+  boardingStopName: string
+  alightingStopName: string
+  providerVehicleId: string
+  serviceType: string
+  connectionProbability: number
+  cumulativeProbability: number
+  readyExpectedAt: string
+  vehicleExpectedAt: string
+  alightingExpectedAt: string
+  confidence: string
+}
+
+export type RouteDecision = {
+  decision: string
+  recommendedPace: string | null
+  overallProbability: number | null
+  targetProbability: number
+  confidence: string
+  reasons: string[]
+  legs: RouteLegDecision[]
+  expectedArrivalAt: string | null
+  calculatedAt: string
+  nextRefreshAt: string
+}
+
+type RouteDecisionPayload = {
+  latitude: number
+  longitude: number
+  accuracyM: number
+  observedAt: string
+  targetProbability: number | null
+  legs: RouteTransitLegPayload[]
+}
+
 type JourneyCreatePayload = {
   anonymousKey: string
   lineId: string
@@ -117,6 +167,14 @@ export function fetchBoardingDecision(journeyId: string, signal?: AbortSignal) {
 export function cancelJourney(journeyId: string, signal?: AbortSignal) {
   return requestApi<JourneySession>(`/api/v1/journeys/${journeyId}`, {
     method: 'DELETE',
+    signal,
+  })
+}
+
+export function calculateRouteDecision(payload: RouteDecisionPayload, signal?: AbortSignal) {
+  return requestApi<RouteDecision>('/api/v1/journeys/route-decisions', {
+    method: 'POST',
+    body: JSON.stringify(payload),
     signal,
   })
 }
