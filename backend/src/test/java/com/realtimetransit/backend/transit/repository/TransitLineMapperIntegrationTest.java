@@ -221,12 +221,12 @@ class TransitLineMapperIntegrationTest {
 		long reversedVehicleObservationId = vehicleRunObservationMapper.insertVehicleRunObservation(
 				new VehicleRunObservationEntity(
 						null, null, line.getId(), directionId, reversedPatternId, "vehicle-reversed", null,
-						destinationStop.getId(), stop.getId(), 2, "LOCAL", "APPROACHING",
+						destinationStop.getId(), destinationStop.getId(), 1, "LOCAL", "APPROACHING",
 						null, null, null, null, "STOP_SEQUENCE", receivedAt, receivedAt));
 		arrivalPredictionObservationMapper.insertArrivalPredictionObservation(
 				new ArrivalPredictionObservationEntity(
 						null, null, reversedVehicleObservationId, stop.getId(),
-						receivedAt.plusSeconds(30), null, null, 1, "CALCULATED", "HIGH",
+						receivedAt.plusSeconds(30), null, null, 5, "CALCULATED", "HIGH",
 						receivedAt, receivedAt));
 		UUID sharedCorridorPatternId = UUID.randomUUID();
 		stopPatternMapper.upsertStopPattern(new StopPatternEntity(
@@ -280,14 +280,16 @@ class TransitLineMapperIntegrationTest {
 		assertThat(arrivalQueryMapper.findUpcomingArrivalsByLineIdAndBoardingStopId(
 				line.getId(), directionId, stop.getId(), receivedAt, receivedAt.minusSeconds(30), 3))
 				.satisfiesExactly(
-						reversedVehicle -> {
-							assertThat(reversedVehicle.getProviderVehicleId()).isEqualTo("vehicle-reversed");
-							assertThat(reversedVehicle.getExpectedAt()).isEqualTo(receivedAt.plusSeconds(30));
-						},
 						firstVehicle -> {
 							assertThat(firstVehicle.getProviderVehicleId()).isEqualTo("vehicle-1");
 							assertThat(firstVehicle.getExpectedAt()).isEqualTo(receivedAt.plusSeconds(300));
 							assertThat(firstVehicle.getConfidence()).isEqualTo("HIGH");
+							assertThat(firstVehicle.getRemainingStops()).isZero();
+						},
+						reversedVehicle -> {
+							assertThat(reversedVehicle.getProviderVehicleId()).isEqualTo("vehicle-reversed");
+							assertThat(reversedVehicle.getExpectedAt()).isEqualTo(receivedAt.plusSeconds(30));
+							assertThat(reversedVehicle.getRemainingStops()).isEqualTo(1);
 						});
 		assertThat(arrivalQueryMapper.findUpcomingArrivalsByLineIdAndBoardingStopId(
 				line.getId(), directionId, stop.getId(), receivedAt, receivedAt.minusSeconds(30), 2))
@@ -309,7 +311,7 @@ class TransitLineMapperIntegrationTest {
 				line.getId(), directionId, stop.getId(), receivedAt, receivedAt.minusSeconds(30), 1))
 				.singleElement()
 				.extracting(UpcomingArrivalEntity::getProviderVehicleId)
-				.isEqualTo("vehicle-reversed");
+				.isEqualTo("vehicle-1");
 
 		long subwayProviderIdForArrival = transitProviderMapper.findByCode("SEOUL_SUBWAY").orElseThrow().getId();
 		jdbcTemplate.update("UPDATE transit_line SET provider_id = ? WHERE id = ?", subwayProviderIdForArrival, line.getId());

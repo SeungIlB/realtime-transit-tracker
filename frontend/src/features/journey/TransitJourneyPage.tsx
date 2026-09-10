@@ -205,9 +205,13 @@ function recommendedPrediction(vehicle: VehicleBoardingPrediction) {
     ?? vehicle.pacePredictions.find((prediction) => prediction.paceType === vehicle.recommendedPace)
 }
 
-function vehiclePosition(vehicle: VehicleBoardingPrediction, routeStops: DirectedStop[]) {
+function vehiclePosition(vehicle: VehicleBoardingPrediction, routeStops: DirectedStop[], boardingStopName: string | null) {
   const observed = vehicle.observedAt ? `${formatTime(vehicle.observedAt)} 관측` : '관측 시각 확인 중'
-  const remaining = typeof vehicle.remainingStops === 'number' ? `승차 지점까지 ${vehicle.remainingStops}정거장` : null
+  const remaining = typeof vehicle.remainingStops === 'number'
+    ? vehicle.currentStopName && boardingStopName
+      ? `${vehicle.currentStopName} → ${boardingStopName} · 승차역까지 ${vehicle.remainingStops}정거장`
+      : `승차 지점까지 ${vehicle.remainingStops}정거장`
+    : null
   if (vehicle.currentStopName) {
     const movement = {
       ARRIVED: '정차 중',
@@ -224,18 +228,21 @@ function vehiclePosition(vehicle: VehicleBoardingPrediction, routeStops: Directe
       ? positionedStops.reduce((closest, stop) => distanceMeters(coordinates, stop) < distanceMeters(coordinates, closest) ? stop : closest)
       : null
     if (nearest) {
+      const routeGap = typeof vehicle.remainingStops === 'number' && boardingStopName
+        ? `${nearest.stopName} → ${boardingStopName} · 승차역까지 ${vehicle.remainingStops}정거장`
+        : remaining
       return {
         label: `${nearest.stopName} 인근`,
-        detail: [`정류장과 약 ${formatDistance(distanceMeters(coordinates, nearest))}`, remaining, observed].filter(Boolean).join(' · '),
+        detail: [`정류장과 약 ${formatDistance(distanceMeters(coordinates, nearest))}`, routeGap, observed].filter(Boolean).join(' · '),
       }
     }
   }
   return { label: remaining ?? '현재 위치 확인 중', detail: observed }
 }
 
-function VehicleCard({ vehicle, index, selected, routeStops }: { vehicle: VehicleBoardingPrediction; index: number; selected: boolean; routeStops: DirectedStop[] }) {
+function VehicleCard({ vehicle, index, selected, routeStops, boardingStopName }: { vehicle: VehicleBoardingPrediction; index: number; selected: boolean; routeStops: DirectedStop[]; boardingStopName: string | null }) {
   const recommended = recommendedPrediction(vehicle)
-  const position = vehiclePosition(vehicle, routeStops)
+  const position = vehiclePosition(vehicle, routeStops, boardingStopName)
   const serviceLabel = { LOCAL: '일반', EXPRESS: '급행', RAPID: '특급' }[vehicle.serviceType] ?? null
   return (
     <article className="vehicle-card" data-selected={selected}>
@@ -342,7 +349,7 @@ function DecisionPanel({ decision, routeStops, access, boardingStopName, locatio
       {decision.vehicles.length ? (
         <>
           <div className="vehicle-grid">
-            {decision.vehicles.map((vehicle, index) => <VehicleCard key={vehicle.arrivalPredictionId} vehicle={vehicle} index={index} selected={vehicle.providerVehicleId === decision.recommendedVehicleId} routeStops={routeStops} />)}
+            {decision.vehicles.map((vehicle, index) => <VehicleCard key={vehicle.arrivalPredictionId} vehicle={vehicle} index={index} selected={vehicle.providerVehicleId === decision.recommendedVehicleId} routeStops={routeStops} boardingStopName={boardingStopName} />)}
           </div>
           {decision.vehicles.length === 1 ? <p className="vehicle-count-note">현재 이 구간에 정차하는 실시간 차량은 1대만 확인됐어요. 다음 차량이 잡히면 함께 표시해요.</p> : null}
         </>

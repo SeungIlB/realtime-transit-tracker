@@ -75,7 +75,10 @@
                 apo.expected_at AS "expectedAt",
                 apo.min_expected_at AS "minExpectedAt",
                 apo.max_expected_at AS "maxExpectedAt",
-                apo.remaining_stops AS "remainingStops",
+                CASE WHEN current_sps.stop_sequence IS NOT NULL
+                     THEN GREATEST(boarding_sps.stop_sequence - current_sps.stop_sequence, 0)
+                     ELSE apo.remaining_stops
+                END AS "remainingStops",
                 apo.source AS "source",
                 apo.confidence AS "confidence",
                 vro.movement_status AS "movementStatus",
@@ -159,7 +162,10 @@
                 apo.expected_at AS "expectedAt",
                 apo.min_expected_at AS "minExpectedAt",
                 apo.max_expected_at AS "maxExpectedAt",
-                apo.remaining_stops AS "remainingStops",
+                CASE WHEN current_sps.stop_sequence IS NOT NULL
+                     THEN GREATEST(boarding_sps.stop_sequence - current_sps.stop_sequence, 0)
+                     ELSE apo.remaining_stops
+                END AS "remainingStops",
                 apo.source AS "source",
                 apo.confidence AS "confidence",
                 vro.movement_status AS "movementStatus",
