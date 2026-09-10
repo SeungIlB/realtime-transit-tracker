@@ -80,7 +80,11 @@
             WHERE vro.line_id = #{lineId}
 			  AND vro.direction_id = #{directionId}
               AND apo.boarding_stop_id = #{boardingStopId}
-              AND apo.expected_at <![CDATA[ >= ]]> #{asOf}
+              AND apo.expected_at <![CDATA[ >= ]]>
+                  CASE WHEN tp.transport_type = 'SUBWAY'
+                       THEN CAST(#{observedAfter} AS TIMESTAMPTZ)
+                       ELSE CAST(#{asOf} AS TIMESTAMPTZ)
+                  END
               AND apo.observed_at <![CDATA[ >= ]]> #{observedAfter}
         )
         SELECT
@@ -167,7 +171,11 @@
                    AND alighting_sps.stop_sequence <![CDATA[ > ]]> boarding_sps.stop_sequence
             WHERE vro.line_id = #{lineId}
               AND apo.boarding_stop_id = #{boardingStopId}
-              AND apo.expected_at <![CDATA[ >= ]]> #{asOf}
+              AND apo.expected_at <![CDATA[ >= ]]>
+                  CASE WHEN tp.transport_type = 'SUBWAY'
+                       THEN CAST(#{observedAfter} AS TIMESTAMPTZ)
+                       ELSE CAST(#{asOf} AS TIMESTAMPTZ)
+                  END
               AND apo.observed_at <![CDATA[ >= ]]> #{observedAfter}
               AND (
                     apo.requested_alighting_stop_id IS NULL
