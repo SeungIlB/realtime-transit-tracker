@@ -2,6 +2,7 @@ package com.realtimetransit.backend.transit.service.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -42,7 +43,6 @@ class ArrivalServiceImplTest {
 	void setUp() {
 		TransitArrivalProperties properties = new TransitArrivalProperties();
 		properties.setObservationFreshness(Duration.ofMinutes(2));
-		properties.setCollectionRefreshInterval(Duration.ofSeconds(30));
 		arrivalService = new ArrivalServiceImpl(
 				arrivalQueryMapper,
 				Clock.fixed(NOW, ZoneOffset.UTC),
@@ -51,46 +51,55 @@ class ArrivalServiceImplTest {
 	}
 
 	@Test
-	void returnsRecentlyCollectedArrivalsWithoutCallingProviderAgain() {
+	void refreshesRecentlyStoredArrivalsBeforeReturningCandidates() {
 		UUID lineId = UUID.randomUUID();
 		UUID directionId = UUID.randomUUID();
 		UUID boardingStopId = UUID.randomUUID();
 		UUID alightingStopId = UUID.randomUUID();
 		UUID currentStopId = UUID.randomUUID();
+		UpcomingArrivalEntity storedFarArrival = UpcomingArrivalEntity.builder()
+				.arrivalPredictionId(1L)
+				.vehicleRunObservationId(2L)
+				.providerVehicleId("vehicle-far")
+				.expectedAt(NOW.plusSeconds(600))
+				.observedAt(NOW.minusSeconds(10))
+				.receivedAt(NOW.minusSeconds(5))
+				.build();
+		UpcomingArrivalEntity refreshedNearArrival = UpcomingArrivalEntity.builder()
+				.arrivalPredictionId(3L)
+				.vehicleRunObservationId(4L)
+				.providerVehicleId("vehicle-near")
+				.lineId(lineId)
+				.boardingStopId(boardingStopId)
+				.expectedAt(NOW.plusSeconds(180))
+				.minExpectedAt(NOW.plusSeconds(120))
+				.maxExpectedAt(NOW.plusSeconds(240))
+				.remainingStops(3)
+				.source("PROVIDER")
+				.confidence("HIGH")
+				.movementStatus("APPROACHING")
+				.currentStopId(currentStopId)
+				.currentStopName("이전 정류장")
+				.currentSequence(4)
+				.observedAt(NOW.minusSeconds(10))
+				.receivedAt(NOW.minusSeconds(5))
+				.build();
 		when(arrivalQueryMapper.findUpcomingArrivalsByLineIdAndBoardingStopIdAndAlightingStopId(
 				lineId, boardingStopId, alightingStopId, NOW, NOW.minusSeconds(120), 2))
-				.thenReturn(List.of(UpcomingArrivalEntity.builder()
-						.arrivalPredictionId(1L)
-						.vehicleRunObservationId(2L)
-						.providerVehicleId("vehicle-1")
-						.lineId(lineId)
-						.boardingStopId(boardingStopId)
-						.expectedAt(NOW.plusSeconds(180))
-						.minExpectedAt(NOW.plusSeconds(120))
-						.maxExpectedAt(NOW.plusSeconds(240))
-						.remainingStops(3)
-						.source("PROVIDER")
-						.confidence("HIGH")
-						.movementStatus("APPROACHING")
-						.currentStopId(currentStopId)
-						.currentStopName("이전 정류장")
-						.currentSequence(4)
-						.observedAt(NOW.minusSeconds(10))
-						.receivedAt(NOW.minusSeconds(5))
-						.build()));
+				.thenReturn(List.of(storedFarArrival), List.of(refreshedNearArrival));
 
 		assertThat(arrivalService.findUpcomingArrivals(lineId, directionId, boardingStopId, alightingStopId))
 				.singleElement()
 				.satisfies(response -> {
-					assertThat(response.getProviderVehicleId()).isEqualTo("vehicle-1");
+					assertThat(response.getProviderVehicleId()).isEqualTo("vehicle-near");
 					assertThat(response.getExpectedAt()).isEqualTo(NOW.plusSeconds(180));
 					assertThat(response.getRemainingStops()).isEqualTo(3);
 					assertThat(response.getCurrentStopId()).isEqualTo(currentStopId);
 					assertThat(response.getCurrentStopName()).isEqualTo("이전 정류장");
 				});
-		verify(arrivalQueryMapper).findUpcomingArrivalsByLineIdAndBoardingStopIdAndAlightingStopId(
+		verify(arrivalQueryMapper, times(2)).findUpcomingArrivalsByLineIdAndBoardingStopIdAndAlightingStopId(
 				lineId, boardingStopId, alightingStopId, NOW, NOW.minusSeconds(120), 2);
-		verifyNoInteractions(externalCollectionService);
+		verify(externalCollectionService).collectArrivals(lineId, boardingStopId, alightingStopId);
 	}
 
 	@Test

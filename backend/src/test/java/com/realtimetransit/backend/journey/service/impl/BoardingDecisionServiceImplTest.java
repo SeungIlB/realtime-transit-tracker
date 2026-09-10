@@ -68,7 +68,6 @@ class BoardingDecisionServiceImplTest {
 		properties = properties();
 		TransitArrivalProperties arrivalProperties = new TransitArrivalProperties();
 		arrivalProperties.setObservationFreshness(Duration.ofMinutes(2));
-		arrivalProperties.setCollectionRefreshInterval(Duration.ofSeconds(30));
 		service = new BoardingDecisionServiceImpl(
 				journeySessionValidator,
 				journeyLocationMapper,
@@ -120,8 +119,17 @@ class BoardingDecisionServiceImplTest {
 	}
 
 	@Test
-	void calculatesFourPacesAndStoresOneGlobalRecommendation() {
+	void refreshesRecentlyStoredArrivalsBeforeCalculatingRecommendation() {
 		JourneySessionEntity journey = stubPredictionInputs();
+		UpcomingArrivalEntity storedFarArrival = UpcomingArrivalEntity.builder()
+				.arrivalPredictionId(10L)
+				.vehicleRunObservationId(20L)
+				.providerVehicleId("vehicle-far")
+				.expectedAt(NOW.plusSeconds(600))
+				.confidence("HIGH")
+				.observedAt(NOW.minusSeconds(5))
+				.receivedAt(NOW.minusSeconds(3))
+				.build();
 		UpcomingArrivalEntity arrival = UpcomingArrivalEntity.builder()
 				.arrivalPredictionId(11L)
 				.vehicleRunObservationId(22L)
@@ -138,7 +146,7 @@ class BoardingDecisionServiceImplTest {
 				.build();
 		when(arrivalQueryMapper.findUpcomingArrivalsByLineIdAndBoardingStopIdAndAlightingStopId(
 				journey.getLineId(), journey.getBoardingStopId(), journey.getAlightingStopId(), NOW,
-				NOW.minusSeconds(120), 2)).thenReturn(List.of(arrival));
+				NOW.minusSeconds(120), 2)).thenReturn(List.of(storedFarArrival), List.of(arrival));
 
 		var response = service.calculateDecision(journey.getId(), ANONYMOUS_KEY);
 
@@ -165,7 +173,8 @@ class BoardingDecisionServiceImplTest {
 			assertThat(snapshot.getModelVersion()).isEqualTo("HEURISTIC_V1");
 			assertThat(snapshot.getFactorsJson()).contains("HAVERSINE");
 		});
-		verifyNoInteractions(externalCollectionService);
+		verify(externalCollectionService).collectArrivals(
+				journey.getLineId(), journey.getBoardingStopId(), journey.getAlightingStopId());
 	}
 
 	private JourneySessionEntity stubPredictionInputs() {

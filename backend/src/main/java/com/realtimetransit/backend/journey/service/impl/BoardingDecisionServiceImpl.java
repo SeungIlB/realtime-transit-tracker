@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 
 import com.realtimetransit.backend.common.error.BusinessException;
@@ -128,29 +129,16 @@ public class BoardingDecisionServiceImpl implements BoardingDecisionService {
 		Instant observedAfter = calculatedAt.minus(arrivalProperties.getObservationFreshness());
 		List<UpcomingArrivalEntity> storedArrivals = findStoredArrivalCandidates(
 				journey, calculatedAt, observedAfter);
-		if (hasRecentlyCollectedArrival(storedArrivals, calculatedAt)) {
-			return storedArrivals;
-		}
 		try {
 			externalCollectionService.collectArrivals(
 					journey.getLineId(), journey.getBoardingStopId(), journey.getAlightingStopId());
-		} catch (BusinessException exception) {
+		} catch (BusinessException | DataAccessException exception) {
 			if (!storedArrivals.isEmpty()) return storedArrivals;
 			throw exception;
 		}
 		List<UpcomingArrivalEntity> refreshedArrivals = findStoredArrivalCandidates(
 				journey, calculatedAt, observedAfter);
 		return refreshedArrivals.isEmpty() ? storedArrivals : refreshedArrivals;
-	}
-
-	private boolean hasRecentlyCollectedArrival(
-			List<UpcomingArrivalEntity> arrivals,
-			Instant calculatedAt) {
-		Instant reusableAfter = calculatedAt.minus(arrivalProperties.getCollectionRefreshInterval());
-		return arrivals.stream()
-				.map(UpcomingArrivalEntity::getReceivedAt)
-				.filter(java.util.Objects::nonNull)
-				.anyMatch(receivedAt -> !receivedAt.isBefore(reusableAfter));
 	}
 
 	private List<UpcomingArrivalEntity> findStoredArrivalCandidates(

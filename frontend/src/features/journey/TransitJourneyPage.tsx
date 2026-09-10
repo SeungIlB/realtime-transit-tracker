@@ -767,7 +767,7 @@ export function TransitJourneyPage() {
         </section>
 
         <section className="flow-card stop-card" aria-labelledby="alighting-heading" data-locked={!boardingStop}>
-          <header className="section-header optional"><span>선택</span><div><h2 id="alighting-heading">어디서 내리나요?</h2><p>{boardingStop ? '내릴 곳을 고르면 정차 여부까지 확인해요.' : '승차 정류장을 먼저 선택해 주세요.'}</p></div></header>
+          <header className="section-header optional"><span>선택</span><div><h2 id="alighting-heading">어디서 내리나요?</h2><p>{boardingStop ? '더 가까워도 이곳에 정차하지 않는 차량은 제외해요.' : '승차 정류장을 먼저 선택해 주세요.'}</p></div></header>
           {boardingStop && destinationQuery.isPending ? <QueryState message="하차 가능한 정류장을 찾고 있어요." /> : null}
           {destinationQuery.isError ? <QueryState message="하차 정류장을 불러오지 못했어요." action="다시 시도" onAction={() => destinationQuery.refetch()} /> : null}
           {destinationQuery.data?.length ? <TextField variant="box" label="하차 정류장 검색" labelOption="sustain" id="alighting-stop-query" name="alightingStopQuery" type="search" value={alightingStopQuery} onChange={(event) => setAlightingStopQuery(event.target.value)} placeholder="정류장 이름 또는 순번" autoComplete="off" /> : null}

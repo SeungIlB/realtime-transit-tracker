@@ -67,7 +67,7 @@ management:
 
 journey:
   default-target-probability: 0.8000
-  session-ttl: 30m
+  session-ttl: 1h
   session-retention: 2h
   max-active-journeys: 3
   location-ttl: 10m
@@ -79,7 +79,7 @@ journey:
   prediction-ttl: 2m
   decision-refresh-interval: 1m
   fresh-location-threshold: 30s
-  usable-location-threshold: 2m
+  usable-location-threshold: 5m
   high-accuracy-threshold-m: 20.00
   medium-accuracy-threshold-m: 50.00
   default-slow-walk-speed-mps: 0.90
@@ -90,7 +90,6 @@ journey:
 transit:
   arrival:
     observation-freshness: 2m
-    collection-refresh-interval: 30s
   maintenance:
     interval: 10m
     observation-retention: 2h
