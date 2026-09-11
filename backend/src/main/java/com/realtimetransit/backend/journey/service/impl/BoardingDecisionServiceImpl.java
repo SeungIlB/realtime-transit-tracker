@@ -42,6 +42,7 @@ import com.realtimetransit.backend.journey.repository.TravelerProfileMapper;
 import com.realtimetransit.backend.journey.service.BoardingDecisionService;
 import com.realtimetransit.backend.journey.service.validation.JourneySessionValidator;
 import com.realtimetransit.backend.provider.service.TransitExternalCollectionService;
+import com.realtimetransit.backend.common.push.PushSubscriptionService;
 import com.realtimetransit.backend.transit.entity.TransitStopEntity;
 import com.realtimetransit.backend.transit.entity.UpcomingArrivalEntity;
 import com.realtimetransit.backend.transit.config.TransitArrivalProperties;
@@ -78,6 +79,7 @@ public class BoardingDecisionServiceImpl implements BoardingDecisionService {
 	private final Clock clock;
 	private final JourneyProperties properties;
 	private final TransitArrivalProperties arrivalProperties;
+	private final PushSubscriptionService pushSubscriptionService;
 
 	@Override
 	public BoardingDecisionResponse calculateDecision(UUID journeyId, UUID anonymousKey) {
@@ -120,7 +122,9 @@ public class BoardingDecisionServiceImpl implements BoardingDecisionService {
 				calculationId, journey, location.get(), calculations, selected, straightDistance, calculatedAt);
 		boardingPredictionMapper.insertBoardingPredictionSnapshots(snapshots);
 
-		return decisionResponse(journey, calculations, selected, calculatedAt);
+		BoardingDecisionResponse response = decisionResponse(journey, calculations, selected, calculatedAt);
+		pushSubscriptionService.notifyVehicleMovement(journeyId, response);
+		return response;
 	}
 
 	private List<UpcomingArrivalEntity> findArrivalCandidates(
