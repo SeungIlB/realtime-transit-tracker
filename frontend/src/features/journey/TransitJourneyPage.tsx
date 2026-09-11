@@ -3,6 +3,7 @@ import type { CSSProperties, FormEvent, PointerEvent as ReactPointerEvent } from
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Button, TextField } from '../../components/ui'
 import { ApiError, getAnonymousKey } from '../../api/client'
+import { registerPush } from '../../api/push'
 import { searchPlaces, type PlaceSearchResult } from '../../api/geocoding'
 import {
   addJourneyLocation,
@@ -206,6 +207,10 @@ function probabilityPercent(value: number) {
 function manualLocationRefreshDue(lastUploadedAt: string | null) {
   return !lastUploadedAt
     || Date.now() - new Date(lastUploadedAt).getTime() >= MANUAL_LOCATION_REFRESH_MS
+}
+
+function browserNotificationPermission(): NotificationPermission | 'unsupported' {
+  return typeof Notification === 'undefined' ? 'unsupported' : Notification.permission
 }
 
 function recommendedPrediction(vehicle: VehicleBoardingPrediction) {
@@ -416,6 +421,7 @@ export function TransitJourneyPage() {
   const [mobilePage, setMobilePage] = useState(0)
   const [suggestedLeg, setSuggestedLeg] = useState<SuggestedTransitLeg | null>(null)
   const [suggestedMatchStatus, setSuggestedMatchStatus] = useState<SuggestedMatchStatus | null>(null)
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | 'unsupported'>(browserNotificationPermission)
   const lastUploadedLocation = useRef<string | null>(null)
   const mobileSwipeStart = useRef<{ x: number; y: number } | null>(null)
   const locationRequestInFlight = useRef(false)
@@ -423,6 +429,8 @@ export function TransitJourneyPage() {
   const suggestedMatchInFlight = useRef(false)
   const suggestedMatchVersion = useRef(0)
   const cancellingJourneyIds = useRef(new Set<string>())
+  const notifiedVehicleEvents = useRef(new Map<string, string>())
+  const previousVehicleSequences = useRef(new Map<string, number>())
   const locationSource = location?.source
 
   const healthQuery = useQuery({ queryKey: ['system', 'health'], queryFn: ({ signal }) => fetchSystemHealth(signal), refetchInterval: 30_000, retry: 1 })
@@ -466,6 +474,36 @@ export function TransitJourneyPage() {
     )
     return () => navigator.geolocation.clearWatch(watchId)
   }, [journeyId, locationSource])
+
+  useEffect(() => {
+    notifiedVehicleEvents.current.clear()
+    previousVehicleSequences.current.clear()
+  }, [journeyId, boardingStop?.stopId])
+
+  useEffect(() => {
+    if (!journeyId || !boardingStop || !decisionQuery.data || notificationPermission !== 'granted') return
+    const previousStopSequence = boardingStop.stopSequence - 1
+    if (previousStopSequence < 1) return
+    for (const vehicle of decisionQuery.data.vehicles) {
+      if (vehicle.currentSequence === null) continue
+      const key = `${journeyId}:${vehicle.providerVehicleId}`
+      const previousSequence = previousVehicleSequences.current.get(key)
+      previousVehicleSequences.current.set(key, vehicle.currentSequence)
+      if (previousSequence === undefined) continue
+      const eventType = previousSequence < previousStopSequence && vehicle.currentSequence >= previousStopSequence
+        ? 'arrived'
+        : previousSequence === previousStopSequence && vehicle.currentSequence > previousStopSequence
+          ? 'departed'
+          : null
+      if (!eventType || notifiedVehicleEvents.current.get(key) === eventType) continue
+      notifiedVehicleEvents.current.set(key, eventType)
+      const title = eventType === 'arrived' ? '이전 역에 도착했어요' : '이전 역에서 출발했어요'
+      new Notification(title, {
+        body: `${vehicle.destinationStopName ?? vehicle.providerVehicleId} 차량이 ${boardingStop.stopName}으로 이동 중이에요.`,
+        tag: `${key}:${eventType}`,
+      })
+    }
+  }, [boardingStop, decisionQuery.data, journeyId, notificationPermission])
 
   useEffect(() => {
     if (!healthQuery.isPending) return
@@ -559,6 +597,19 @@ export function TransitJourneyPage() {
       return null
     } finally {
       locationRequestInFlight.current = false
+    }
+  }
+
+  async function enableNotifications() {
+    if (typeof Notification === 'undefined') return
+    const permission = await Notification.requestPermission()
+    setNotificationPermission(permission)
+    if (permission === 'granted') {
+      try {
+        await registerPush(journeyId ?? undefined)
+      } catch {
+        setNotificationPermission('default')
+      }
     }
   }
 
@@ -931,6 +982,7 @@ export function TransitJourneyPage() {
         <div className="mobile-page mobile-result-page" data-mobile-page="4" data-active={mobilePage === 4} aria-label="탑승 가능성 결과">
         <section id="decision-section" className="decision-section" aria-labelledby="decision-heading" data-active={Boolean(boardingStop && location)}>
           <div className="decision-setup"><div><span>4 · 실시간 판단</span><h2 id="decision-heading">이제 탈 수 있는지<br />계산해 볼게요</h2><p>{boardingStop ? `${boardingStop.stopName}${alightingStop ? ` → ${alightingStop.stopName}` : ''}` : '위치와 승차 정류장을 선택해 주세요.'}</p></div><Button type="button" display="full" size="xlarge" color="light" onClick={startJourney} disabled={!location || !boardingStop} loading={journeyState === 'starting'}>{journeyId ? '다시 계산하기' : '탑승 가능성 계산'}</Button></div>
+          {notificationPermission !== 'granted' && notificationPermission !== 'unsupported' ? <Button type="button" variant="weak" size="small" onClick={() => { void enableNotifications() }}>이전역·이전 정류장 알림 켜기</Button> : null}
           {selectedBoardingAccess?.isRemote && boardingStop ? <div className="distance-notice" role="status"><strong>{boardingStop.stopName}까지 {formatDistance(selectedBoardingAccess.distanceM)}</strong><p>보통 걸음으로 {formatDuration(selectedBoardingAccess.walkMinutes)}이 예상돼요. 첫 차량은 놓칠 가능성이 높아요.</p></div> : null}
           {!location || !boardingStop ? <QueryState message={!location ? '먼저 출발 위치를 확인해 주세요.' : '승차 정류장을 선택하면 계산할 수 있어요.'} /> : null}
           {journeyState === 'starting' ? <QueryState message={healthQuery.isPending ? '서버를 준비하고 있어요. 무료 서버가 깨어나는 데 최대 2분 정도 걸릴 수 있어요.' : '여정과 현재 위치를 저장하고 있어요.'} /> : null}
