@@ -18,6 +18,7 @@ type Coordinate = {
 type TransitRouteFinderProps = {
   origin: Coordinate
   onChooseLeg: (leg: SuggestedTransitLeg) => void
+  onRefreshLocation?: () => Promise<Coordinate | null>
 }
 
 export type SuggestedTransitLeg = {
@@ -111,7 +112,7 @@ function RouteDecisionSummary({ decision }: { decision: RouteDecision }) {
   )
 }
 
-export function TransitRouteFinder({ origin, onChooseLeg }: TransitRouteFinderProps) {
+export function TransitRouteFinder({ origin, onChooseLeg, onRefreshLocation }: TransitRouteFinderProps) {
   const queryClient = useQueryClient()
   const [destinationQuery, setDestinationQuery] = useState('')
   const [submittedDestinationQuery, setSubmittedDestinationQuery] = useState('')
@@ -218,15 +219,16 @@ export function TransitRouteFinder({ origin, onChooseLeg }: TransitRouteFinderPr
     routeCalculationInFlight.current.add(routeIndex)
     setRouteCalculations((current) => ({ ...current, [routeIndex]: { state: 'loading' } }))
     try {
+      const calculationOrigin = await onRefreshLocation?.() ?? origin
       const legs: RouteTransitLegPayload[] = []
       for (let index = 0; index < transitLegs.length; index += 1) {
         legs.push(await resolveRouteLeg(transitLegs[index], transferWalkMinutesBefore(route.legs, index)))
       }
       const decision = await calculateRouteDecision({
-        latitude: origin.latitude,
-        longitude: origin.longitude,
-        accuracyM: origin.accuracyM ?? 0,
-        observedAt: origin.observedAt ?? new Date().toISOString(),
+        latitude: calculationOrigin.latitude,
+        longitude: calculationOrigin.longitude,
+        accuracyM: calculationOrigin.accuracyM ?? 0,
+        observedAt: calculationOrigin.observedAt ?? new Date().toISOString(),
         targetProbability: null,
         legs,
       })
@@ -242,6 +244,21 @@ export function TransitRouteFinder({ origin, onChooseLeg }: TransitRouteFinderPr
   function selectRoute(routeIndex: number) {
     setSelectedRouteIndex(routeIndex)
     void calculateLiveRoute(routeIndex)
+  }
+
+  async function chooseRouteLeg(leg: TransitRouteLeg) {
+    await onRefreshLocation?.()
+    const query = legQuery(leg)
+    const provider: TransitProvider = leg.type === 'SUBWAY' ? 'SEOUL_SUBWAY' : 'NATIONAL_PRECISION_BUS'
+    onChooseLeg({
+      provider,
+      query,
+      startName: leg.startName!,
+      endName: leg.endName!,
+      lineSearchLocation: leg.startLatitude !== null && leg.startLongitude !== null
+        ? { latitude: leg.startLatitude, longitude: leg.startLongitude }
+        : null,
+    })
   }
 
   return (
@@ -332,7 +349,6 @@ export function TransitRouteFinder({ origin, onChooseLeg }: TransitRouteFinderPr
                 {!isCollapsed ? <ol className="route-leg-list">
                   {transitLegs.map((leg, legIndex) => {
                     const query = legQuery(leg)
-                    const provider: TransitProvider = leg.type === 'SUBWAY' ? 'SEOUL_SUBWAY' : 'NATIONAL_PRECISION_BUS'
                     return (
                       <li key={`${leg.type}-${legIndex}`}>
                         <div className="route-leg-symbol" data-type={leg.type}>{leg.type === 'SUBWAY' ? '철도' : '버스'}</div>
@@ -346,15 +362,7 @@ export function TransitRouteFinder({ origin, onChooseLeg }: TransitRouteFinderPr
                           size="small"
                           variant="weak"
                           disabled={!query || !leg.startName || !leg.endName}
-                          onClick={() => onChooseLeg({
-                            provider,
-                            query,
-                            startName: leg.startName!,
-                            endName: leg.endName!,
-                            lineSearchLocation: leg.startLatitude !== null && leg.startLongitude !== null
-                              ? { latitude: leg.startLatitude, longitude: leg.startLongitude }
-                              : null,
-                          })}
+                          onClick={() => { void chooseRouteLeg(leg) }}
                         >
                           이 구간 탑승 계산
                         </Button>

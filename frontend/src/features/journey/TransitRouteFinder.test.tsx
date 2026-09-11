@@ -51,11 +51,12 @@ describe('TransitRouteFinder', () => {
       }],
     }])
     const onChooseLeg = vi.fn()
+    const onRefreshLocation = vi.fn().mockResolvedValue({ latitude: 37.567, longitude: 126.978, accuracyM: 8, observedAt: '2026-09-11T02:00:00Z' })
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const user = userEvent.setup()
     render(
       <QueryClientProvider client={queryClient}>
-        <TransitRouteFinder origin={{ latitude: 37.5663, longitude: 126.9779 }} onChooseLeg={onChooseLeg} />
+        <TransitRouteFinder origin={{ latitude: 37.5663, longitude: 126.9779 }} onChooseLeg={onChooseLeg} onRefreshLocation={onRefreshLocation} />
       </QueryClientProvider>,
     )
 
@@ -65,7 +66,7 @@ describe('TransitRouteFinder', () => {
     await user.click(screen.getByRole('button', { name: '대중교통 경로 찾기' }))
 
     expect(await screen.findByText('49분')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: '이 구간 계산' }))
+    await user.click(screen.getByRole('button', { name: '이 구간 탑승 계산' }))
 
     await waitFor(() => expect(onChooseLeg).toHaveBeenCalledWith({
       provider: 'SEOUL_SUBWAY',
@@ -74,6 +75,7 @@ describe('TransitRouteFinder', () => {
       endName: '부평',
       lineSearchLocation: { latitude: 37.5657, longitude: 126.977 },
     }))
+    expect(onRefreshLocation).toHaveBeenCalledTimes(1)
     expect(searchTransitRoutes).toHaveBeenCalledTimes(1)
   })
 
@@ -125,8 +127,7 @@ describe('TransitRouteFinder', () => {
     fireEvent.submit(screen.getByRole('search'))
     await user.click(await screen.findByRole('button', { name: /명동역/ }))
     await user.click(screen.getByRole('button', { name: '대중교통 경로 찾기' }))
-    await user.click(await screen.findByRole('button', { name: '실시간 확률 계산' }))
-
+    await user.click(await screen.findByRole('button', { name: /지하철25분/ }))
     await waitFor(() => expect(calculateRouteDecision).toHaveBeenCalledTimes(1))
     expect(vi.mocked(calculateRouteDecision).mock.calls[0][0].legs.map((leg) => leg.transferWalkTimeMinutes)).toEqual([0, 3])
     expect(await screen.findByText('90%')).toBeInTheDocument()

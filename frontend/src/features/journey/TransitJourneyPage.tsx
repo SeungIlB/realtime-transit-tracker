@@ -534,26 +534,29 @@ export function TransitJourneyPage() {
     }
   }
 
-  async function requestLocation() {
-    if (locationRequestInFlight.current) return
+  async function requestLocation(): Promise<LocationSnapshot | null> {
+    if (locationRequestInFlight.current) return null
     if (!navigator.geolocation) {
       setLocationStatus('error')
       setLocationError('이 브라우저는 위치 확인을 지원하지 않아요. 주소나 장소명으로 찾아주세요.')
       setPlaceSearchOpen(true)
-      return
+      return null
     }
     locationRequestInFlight.current = true
     setLocationStatus('loading')
     setLocationError(null)
     try {
       const position = await getBrowserPosition()
-      setLocation(toLocationSnapshot(position))
+      const nextLocation = toLocationSnapshot(position)
+      setLocation(nextLocation)
       setLocationLabel(null)
       setLocationStatus('ready')
+      return nextLocation
     } catch (error) {
       setLocationStatus('error')
       setLocationError(positionErrorMessage(error as GeolocationPositionError))
       setPlaceSearchOpen(true)
+      return null
     } finally {
       locationRequestInFlight.current = false
     }
@@ -869,7 +872,11 @@ export function TransitJourneyPage() {
         <div className="mobile-page" data-mobile-page="2" data-active={mobilePage === 2} aria-label="노선 선택">
         <section className="flow-card line-card" aria-labelledby="line-heading">
           <header className="section-header"><span>2</span><div><h2 id="line-heading">어떤 노선을 타나요?</h2><p>목적지 경로에서 고르거나 노선을 직접 찾아보세요.</p></div></header>
-          {location ? <TransitRouteFinder origin={location} onChooseLeg={chooseSuggestedLeg} /> : null}
+          {location ? <TransitRouteFinder
+            origin={location}
+            onChooseLeg={chooseSuggestedLeg}
+            onRefreshLocation={location.source === 'browser' ? requestLocation : undefined}
+          /> : null}
           {suggestedMatchStatus ? <div className="route-match-status" data-state={suggestedMatchStatus.state} role="status"><span aria-hidden="true">{suggestedMatchStatus.state === 'matched' ? '✓' : suggestedMatchStatus.state === 'loading' ? '···' : '!'}</span><p>{suggestedMatchStatus.message}</p></div> : null}
           <div className="manual-line-divider"><span>노선 직접 찾기</span></div>
           <fieldset className="provider-tabs"><legend>교통수단 선택</legend>{providerOptions.map((option) => <label key={option.value} data-selected={provider === option.value}><input type="radio" name="transitProvider" value={option.value} checked={provider === option.value} onChange={() => changeProvider(option.value)} /><span>{option.label}</span></label>)}</fieldset>
