@@ -855,7 +855,10 @@ export function TransitJourneyPage() {
       <a className="skip-link" href="#journey-content">여정 설정으로 건너뛰기</a>
       <header className="app-bar">
         <a className="brand" href="/" aria-label="첫차 홈">첫차</a>
-        <span className="connection" data-status={healthStatus} role="status"><i aria-hidden="true" />{healthStatus === 'live' ? '실시간 연결' : healthStatus === 'checking' ? healthCheckSlow ? '서버 준비 중' : '연결 확인 중' : '연결 끊김'}</span>
+        <div className="app-bar-actions">
+          {notificationPermission !== 'unsupported' ? <button className="notification-toggle" type="button" aria-label={notificationPermission === 'granted' ? '웹 알림 켜짐' : '웹 알림 켜기'} onClick={() => { void enableNotifications() }} data-enabled={notificationPermission === 'granted'}>{notificationPermission === 'granted' ? '알림 켬' : '알림'}</button> : null}
+          <span className="connection" data-status={healthStatus} role="status"><i aria-hidden="true" />{healthStatus === 'live' ? '실시간 연결' : healthStatus === 'checking' ? healthCheckSlow ? '서버 준비 중' : '연결 확인 중' : '연결 끊김'}</span>
+        </div>
       </header>
 
       <main id="journey-content" className="journey-layout">
@@ -888,11 +891,6 @@ export function TransitJourneyPage() {
             </li>
           </ol>
         </aside>
-
-        {notificationPermission !== 'unsupported' ? <aside className="usage-guide notification-guide" aria-label="웹 푸시 알림">
-          <div className="usage-guide-intro"><span>알림</span><h2>이전 역·정류장에 도착하면<br />알려드릴게요</h2><p>웹 알림을 켜면 차량 위치가 갱신될 때 알려드려요.</p></div>
-          {notificationPermission === 'granted' ? <p className="provider-note">웹 알림이 켜져 있어요.</p> : <Button type="button" variant="weak" size="small" onClick={() => { void enableNotifications() }}>웹 알림 켜기</Button>}
-        </aside> : null}
 
         <MobilePageActions nextLabel="시작하기" onNext={() => goToMobilePage(1)} />
         </div>
