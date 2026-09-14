@@ -6,6 +6,13 @@ type PushSubscriptionPayload = {
   keys: { p256dh: string; auth: string }
 }
 
+function vapidKeyToBytes(value: string) {
+  const padding = '='.repeat((4 - value.length % 4) % 4)
+  const base64 = (value + padding).replace(/-/g, '+').replace(/_/g, '/')
+  const raw = window.atob(base64)
+  return Uint8Array.from(raw, (character) => character.charCodeAt(0))
+}
+
 export function savePushSubscription(subscription: PushSubscription, journeyId?: string) {
   const json = subscription.toJSON()
   const payload: PushSubscriptionPayload = {
@@ -30,7 +37,7 @@ export async function registerPush(journeyId?: string) {
   const existing = await registration.pushManager.getSubscription()
   const subscription = existing || await registration.pushManager.subscribe({
     userVisibleOnly: true,
-    applicationServerKey: publicKey,
+    applicationServerKey: vapidKeyToBytes(publicKey),
   })
   await savePushSubscription(subscription, journeyId)
   return true
