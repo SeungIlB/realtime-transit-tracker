@@ -18,11 +18,13 @@ import nl.martijndwars.webpush.PushService;
 import nl.martijndwars.webpush.Subscription;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class PushSubscriptionService {
 	private static final String REDIS_KEY = "rtt:push:subscriptions";
 	private static final Duration DEDUPE_TTL = Duration.ofMinutes(10);
@@ -74,11 +76,14 @@ public class PushSubscriptionService {
 							"url", "/"));
 					Subscription subscription = new Subscription(request.getEndpoint(),
 						new Subscription.Keys(request.getKeys().getP256dh(), request.getKeys().getAuth()));
-					new PushService(publicKey, privateKey, subject).send(
+					var response = new PushService(publicKey, privateKey, subject).send(
 							new Notification(subscription, payload), Encoding.AES128GCM);
+					int status = response.getStatusLine().getStatusCode();
+					if (status == 404 || status == 410) remove(request.getEndpoint());
+					else if (status >= 400) log.warn("Web push failed for journeyId={} with status={}", journeyId, status);
 				}
 			} catch (Exception exception) {
-				// Expired subscriptions are ignored; the next registration replaces them.
+				log.warn("Web push delivery failed for journeyId={}: {}", journeyId, exception.getMessage());
 			}
 		}
 	}
