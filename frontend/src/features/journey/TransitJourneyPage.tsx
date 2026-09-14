@@ -433,6 +433,12 @@ export function TransitJourneyPage() {
   const previousVehicleSequences = useRef(new Map<string, number>())
   const locationSource = location?.source
 
+  useEffect(() => {
+    if (journeyId && notificationPermission === 'granted') {
+      void registerPush(journeyId)
+    }
+  }, [journeyId, notificationPermission])
+
   const healthQuery = useQuery({ queryKey: ['system', 'health'], queryFn: ({ signal }) => fetchSystemHealth(signal), refetchInterval: 30_000, retry: 1 })
   const lineQuery = useQuery({
     queryKey: ['transit-lines', provider, submittedQuery, submittedLineLocation?.latitude, submittedLineLocation?.longitude],
@@ -882,6 +888,11 @@ export function TransitJourneyPage() {
             </li>
           </ol>
         </aside>
+
+        {notificationPermission !== 'unsupported' ? <aside className="usage-guide notification-guide" aria-label="웹 푸시 알림">
+          <div className="usage-guide-intro"><span>알림</span><h2>이전 역·정류장에 도착하면<br />알려드릴게요</h2><p>웹 알림을 켜면 차량 위치가 갱신될 때 알려드려요.</p></div>
+          {notificationPermission === 'granted' ? <p className="provider-note">웹 알림이 켜져 있어요.</p> : <Button type="button" variant="weak" size="small" onClick={() => { void enableNotifications() }}>웹 알림 켜기</Button>}
+        </aside> : null}
 
         <MobilePageActions nextLabel="시작하기" onNext={() => goToMobilePage(1)} />
         </div>
