@@ -1,0 +1,12 @@
+{
+  "name": "첫차 실시간 탑승 판단",
+  "short_name": "첫차",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f2f4f6",
+  "theme_color": "#ffffff",
+  "lang": "ko",
+  "icons": [
+    { "src": "/app-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
