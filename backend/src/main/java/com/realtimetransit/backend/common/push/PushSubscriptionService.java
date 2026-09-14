@@ -1,6 +1,7 @@
 package com.realtimetransit.backend.common.push;
 
 import java.util.UUID;
+import java.time.Duration;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -23,6 +24,7 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 public class PushSubscriptionService {
 	private static final String REDIS_KEY = "rtt:push:subscriptions";
+	private static final Duration DEDUPE_TTL = Duration.ofMinutes(10);
 
 	private final StringRedisTemplate redisTemplate;
 	private final ObjectMapper objectMapper;
@@ -57,6 +59,11 @@ public class PushSubscriptionService {
 				PushSubscriptionRequest request = objectMapper.readValue((String) value, PushSubscriptionRequest.class);
 				if (request.getJourneyId() == null || !request.getJourneyId().equals(journeyId.toString())) continue;
 				for (VehicleBoardingPredictionResponse vehicle : decision.getVehicles()) {
+					String eventKey = journeyId + ":" + vehicle.getProviderVehicleId() + ":"
+							+ (vehicle.getCurrentSequence() == null ? vehicle.getVehicleExpectedAt() : vehicle.getCurrentSequence());
+					Boolean firstEvent = redisTemplate.opsForValue().setIfAbsent(
+							"rtt:push:notified:" + eventKey, "1", DEDUPE_TTL);
+					if (!Boolean.TRUE.equals(firstEvent)) continue;
 					String payload = objectMapper.writeValueAsString(java.util.Map.of(
 							"title", "탑승 알림",
 							"body", vehicle.getCurrentStopName() == null

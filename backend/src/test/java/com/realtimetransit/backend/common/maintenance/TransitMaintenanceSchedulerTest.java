@@ -15,6 +15,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.realtimetransit.backend.journey.repository.JourneyLocationMapper;
 import com.realtimetransit.backend.journey.repository.JourneyMapper;
 import com.realtimetransit.backend.journey.repository.TravelerProfileMapper;
+import com.realtimetransit.backend.journey.service.BoardingDecisionService;
 import com.realtimetransit.backend.journey.config.JourneyProperties;
 import com.realtimetransit.backend.provider.service.ObservationRetentionService;
 
@@ -31,6 +32,8 @@ class TransitMaintenanceSchedulerTest {
 	private JourneyMapper journeyMapper;
 	@Mock
 	private TravelerProfileMapper travelerProfileMapper;
+	@Mock
+	private BoardingDecisionService boardingDecisionService;
 
 	@Test
 	void deletesDependentObservationsBeforeTheirParentsAndExpiresJourneyData() {
@@ -46,7 +49,8 @@ class TransitMaintenanceSchedulerTest {
 				travelerProfileMapper,
 				properties,
 				journeyProperties,
-				Clock.fixed(NOW, ZoneOffset.UTC));
+				Clock.fixed(NOW, ZoneOffset.UTC),
+				boardingDecisionService);
 
 		scheduler.cleanExpiredData();
 

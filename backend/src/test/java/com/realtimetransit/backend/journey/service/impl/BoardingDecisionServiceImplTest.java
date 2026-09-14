@@ -37,6 +37,7 @@ import com.realtimetransit.backend.journey.repository.BoardingPredictionMapper;
 import com.realtimetransit.backend.journey.repository.JourneyLocationMapper;
 import com.realtimetransit.backend.journey.repository.TravelerProfileMapper;
 import com.realtimetransit.backend.journey.service.validation.JourneySessionValidator;
+import com.realtimetransit.backend.common.push.PushSubscriptionService;
 import com.realtimetransit.backend.provider.service.TransitExternalCollectionService;
 import com.realtimetransit.backend.transit.entity.TransitStopEntity;
 import com.realtimetransit.backend.transit.entity.UpcomingArrivalEntity;
@@ -59,6 +60,7 @@ class BoardingDecisionServiceImplTest {
 	@Mock private ArrivalQueryMapper arrivalQueryMapper;
 	@Mock private BoardingPredictionMapper boardingPredictionMapper;
 	@Mock private TransitExternalCollectionService externalCollectionService;
+	@Mock private PushSubscriptionService pushSubscriptionService;
 
 	private BoardingDecisionServiceImpl service;
 	private JourneyProperties properties;
@@ -85,7 +87,8 @@ class BoardingDecisionServiceImplTest {
 				new ObjectMapper(),
 				Clock.fixed(NOW, ZoneOffset.UTC),
 				properties,
-				arrivalProperties);
+				arrivalProperties,
+				pushSubscriptionService);
 	}
 
 	@Test

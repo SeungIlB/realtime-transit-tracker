@@ -62,6 +62,15 @@
           AND tp.anonymous_key = #{anonymousKey}
     </select>
 
+    <select id="findActiveJourneySessions" resultMap="journeySessionMap">
+        SELECT <include refid="journeySessionColumns" />
+        FROM journey_session
+        WHERE status = 'ACTIVE'
+          AND expires_at &gt; #{asOf}
+        ORDER BY updated_at ASC, id ASC
+        LIMIT #{limit}
+    </select>
+
     <select id="countActiveJourneySessions" resultType="int">
         SELECT COUNT(*)
         FROM journey_session

@@ -2,6 +2,7 @@ package com.realtimetransit.backend.journey.repository;
 
 import java.time.Instant;
 import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
 
 import org.apache.ibatis.annotations.Mapper;
@@ -20,6 +21,10 @@ public interface JourneyMapper {
 	Optional<JourneySessionEntity> findJourneySessionByIdAndAnonymousKey(
 			@Param("id") UUID id,
 			@Param("anonymousKey") UUID anonymousKey);
+
+	List<JourneySessionEntity> findActiveJourneySessions(
+			@Param("asOf") Instant asOf,
+			@Param("limit") int limit);
 
 	int countActiveJourneySessions(
 			@Param("travelerProfileId") UUID travelerProfileId,
