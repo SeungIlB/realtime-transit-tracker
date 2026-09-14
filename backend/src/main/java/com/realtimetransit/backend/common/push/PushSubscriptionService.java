@@ -13,6 +13,7 @@ import com.realtimetransit.backend.journey.dto.response.BoardingDecisionResponse
 import com.realtimetransit.backend.journey.dto.response.VehicleBoardingPredictionResponse;
 
 import nl.martijndwars.webpush.Notification;
+import nl.martijndwars.webpush.Encoding;
 import nl.martijndwars.webpush.PushService;
 import nl.martijndwars.webpush.Subscription;
 
@@ -73,7 +74,8 @@ public class PushSubscriptionService {
 							"url", "/"));
 					Subscription subscription = new Subscription(request.getEndpoint(),
 						new Subscription.Keys(request.getKeys().getP256dh(), request.getKeys().getAuth()));
-					new PushService(publicKey, privateKey, subject).send(new Notification(subscription, payload));
+					new PushService(publicKey, privateKey, subject).send(
+							new Notification(subscription, payload), Encoding.AES128GCM);
 				}
 			} catch (Exception exception) {
 				// Expired subscriptions are ignored; the next registration replaces them.
