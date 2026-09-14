@@ -856,7 +856,7 @@ export function TransitJourneyPage() {
       <header className="app-bar">
         <a className="brand" href="/" aria-label="첫차 홈">첫차</a>
         <div className="app-bar-actions">
-          {notificationPermission !== 'unsupported' ? <button className="notification-toggle" type="button" aria-label={notificationPermission === 'granted' ? '웹 알림 켜짐' : '웹 알림 켜기'} aria-pressed={notificationPermission === 'granted'} onClick={() => { void enableNotifications() }} data-enabled={notificationPermission === 'granted'}><i aria-hidden="true" /><span>알림</span></button> : null}
+          <button className="notification-toggle" type="button" aria-label={notificationPermission === 'granted' ? '웹 알림 켜짐' : notificationPermission === 'unsupported' ? '이 환경에서는 웹 알림을 지원하지 않음' : '웹 알림 켜기'} aria-pressed={notificationPermission === 'granted'} disabled={notificationPermission === 'unsupported'} onClick={() => { void enableNotifications() }} data-enabled={notificationPermission === 'granted'} data-supported={notificationPermission !== 'unsupported'}><i aria-hidden="true" /><span>{notificationPermission === 'unsupported' ? '미지원' : '알림'}</span></button>
           <span className="connection" data-status={healthStatus} role="status"><i aria-hidden="true" />{healthStatus === 'live' ? '실시간 연결' : healthStatus === 'checking' ? healthCheckSlow ? '서버 준비 중' : '연결 확인 중' : '연결 끊김'}</span>
         </div>
       </header>
