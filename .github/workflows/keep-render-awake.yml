@@ -2,7 +2,11 @@ name: Keep Render Backend Warm
 
 on:
   schedule:
-    - cron: "*/10 * * * *"
+    # KST 06:00~10:00 (UTC 21:00~01:00, 자정 경계로 분리)
+    - cron: "*/10 21-23 * * *"
+    - cron: "*/10 0-1 * * *"
+    # KST 17:00~22:00 (UTC 08:00~13:00)
+    - cron: "*/10 8-13 * * *"
   workflow_dispatch:
 
 permissions:
