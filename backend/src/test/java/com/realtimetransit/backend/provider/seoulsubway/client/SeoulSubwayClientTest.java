@@ -9,12 +9,27 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 import com.realtimetransit.backend.provider.client.dto.ExternalArrival;
+import com.realtimetransit.backend.provider.kric.client.KricStationMaster;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 class SeoulSubwayClientTest {
 	private final ObjectMapper objectMapper = new ObjectMapper();
+	private final KricStationMaster stationMaster = new KricStationMaster();
+
+	@Test
+	void buildsNamespacedBidirectionalStopsForKricLines() {
+		var directions = SeoulSubwayClient.kricDirections(stationMaster.findByLineCode("I1"));
+
+		assertThat(directions).extracting(direction -> direction.getDisplayName())
+				.containsExactly("송도달빛축제공원 방면", "검단호수공원 방면");
+		assertThat(directions.getFirst().getStops()).hasSize(33);
+		assertThat(directions.getFirst().getStops().getFirst().getProviderStopId())
+				.isEqualTo("IC:I1:107");
+		assertThat(directions.getFirst().getStops().getLast().getProviderStopId())
+				.isEqualTo("IC:I1:139");
+	}
 
 	@Test
 	void keepsAnEnteringTrainBoardableForAShortGracePeriod() {

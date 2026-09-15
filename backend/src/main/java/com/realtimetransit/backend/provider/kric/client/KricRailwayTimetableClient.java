@@ -49,13 +49,20 @@ public class KricRailwayTimetableClient extends ProviderClientSupport {
 	public List<KricStation> findStations(String stationName) {
 		JsonNode response = call("/convenientInfo/stationInfo", stationName, null, null);
 		return objectsContaining(response, "stinNm", "railOprIsttCd", "lnCd", "stinCd").stream()
-				.map(node -> KricStation.builder()
-						.operatorCode(text(node, "railOprIsttCd"))
-						.lineCode(text(node, "lnCd"))
-						.stationCode(text(node, "stinCd"))
-						.stationName(text(node, "stinNm"))
-						.build())
+				.map(KricRailwayTimetableClient::toStation)
 				.filter(station -> sameStationName(station.getStationName(), stationName))
+				.toList();
+	}
+
+	@Cacheable(
+			cacheNames = TransitCacheNames.TRANSIT_STATIC_DATA,
+			key = "'KRIC:line-stations:' + #operatorCode + ':' + #lineCode",
+			unless = "#result.isEmpty()")
+	public List<KricStation> findLineStations(String operatorCode, String lineCode) {
+		KricStation query = KricStation.builder().operatorCode(operatorCode).lineCode(lineCode).build();
+		JsonNode response = call("/convenientInfo/stationInfo", null, query, null);
+		return objectsContaining(response, "stinNm", "railOprIsttCd", "lnCd", "stinCd").stream()
+				.map(KricRailwayTimetableClient::toStation)
 				.toList();
 	}
 
@@ -94,9 +101,15 @@ public class KricRailwayTimetableClient extends ProviderClientSupport {
 								.queryParam("format", "json");
 						if (stationName != null) builder.queryParam("stinNm", stationName);
 						if (station != null) {
-							builder.queryParam("railOprIsttCd", station.getOperatorCode())
-									.queryParam("lnCd", station.getLineCode())
-									.queryParam("stinCd", station.getStationCode());
+							if (station.getOperatorCode() != null) {
+								builder.queryParam("railOprIsttCd", station.getOperatorCode());
+							}
+							if (station.getLineCode() != null) {
+								builder.queryParam("lnCd", station.getLineCode());
+							}
+							if (station.getStationCode() != null) {
+								builder.queryParam("stinCd", station.getStationCode());
+							}
 						}
 						if (dayCode != null) builder.queryParam("dayCd", dayCode);
 						return builder.build();
@@ -106,6 +119,17 @@ public class KricRailwayTimetableClient extends ProviderClientSupport {
 		} catch (RestClientException exception) {
 			throw new BusinessException(ErrorCode.EXTERNAL_API_ERROR, "KRIC " + path);
 		}
+	}
+
+	private static KricStation toStation(JsonNode node) {
+		return KricStation.builder()
+				.operatorCode(text(node, "railOprIsttCd"))
+				.lineCode(text(node, "lnCd"))
+				.stationCode(text(node, "stinCd"))
+				.stationName(text(node, "stinNm"))
+				.latitude(decimal(node, "stinLocLat"))
+				.longitude(decimal(node, "stinLocLon"))
+				.build();
 	}
 
 	static List<JsonNode> objectsContaining(JsonNode root, String... fields) {

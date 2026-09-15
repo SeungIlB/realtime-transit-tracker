@@ -34,6 +34,9 @@ import com.realtimetransit.backend.provider.client.dto.ExternalDirection;
 import com.realtimetransit.backend.provider.client.dto.ExternalRouteReference;
 import com.realtimetransit.backend.provider.client.dto.ExternalStop;
 import com.realtimetransit.backend.provider.client.dto.ExternalTransitLine;
+import com.realtimetransit.backend.provider.kric.client.KricStationMaster;
+import com.realtimetransit.backend.provider.kric.client.KricRailwayTimetableClient;
+import com.realtimetransit.backend.provider.kric.dto.KricStation;
 
 @Component
 @EnableConfigurationProperties(TransitProviderProperties.class)
@@ -44,22 +47,40 @@ public class SeoulSubwayClient extends ProviderClientSupport implements TransitP
 	private static final List<String> LINES = List.of(
 			"01호선", "02호선", "03호선", "04호선", "05호선", "06호선", "07호선", "08호선", "09호선",
 			"경강선", "경의선", "경춘선", "공항철도", "서해선", "수인분당선", "신림선",
+			"인천1호선", "인천2호선", "김포골드라인",
 			"신분당선", "우이신설경전철", "GTX-A");
+	private static final Set<String> KRIC_STATIC_LINES = Set.of("인천1호선", "인천2호선", "김포골드라인", "서해선");
+	private static final Set<String> KRIC_SCHEDULE_ONLY_LINES = Set.of("인천1호선", "인천2호선", "김포골드라인");
+	private static final Map<String, String> KRIC_OPERATORS = Map.of(
+			"인천1호선", "인천교통공사",
+			"인천2호선", "인천교통공사",
+			"김포골드라인", "김포골드라인에스알에스(주)",
+			"서해선", "한국철도공사/서해철도주식회사");
+	private static final Map<String, String> KRIC_LINE_CODES = Map.of(
+			"인천1호선", "I1",
+			"인천2호선", "I2",
+			"김포골드라인", "G1",
+			"서해선", "WS");
 	private final RestClient realtimeClient;
 	private final String realtimeServiceKey;
 	private final SeoulSubwayReferenceClient referenceClient;
 	private final SeoulSubwayPositionClient positionClient;
+	private final KricStationMaster kricStationMaster;
+	private final KricRailwayTimetableClient kricTimetableClient;
 	private final Clock clock;
 
 	public SeoulSubwayClient(RestClient.Builder builder, ExternalApiQuotaService quotaService,
 			TransitProviderProperties properties, SeoulSubwayReferenceClient referenceClient,
-			SeoulSubwayPositionClient positionClient, Clock clock) {
+			SeoulSubwayPositionClient positionClient, KricStationMaster kricStationMaster,
+			KricRailwayTimetableClient kricTimetableClient, Clock clock) {
 		super(quotaService);
 		var config = properties.getSeoulSubway();
 		this.realtimeClient = builder.clone().baseUrl(config.getBaseUrl()).build();
 		this.realtimeServiceKey = config.getServiceKey();
 		this.referenceClient = referenceClient;
 		this.positionClient = positionClient;
+		this.kricStationMaster = kricStationMaster;
+		this.kricTimetableClient = kricTimetableClient;
 		this.clock = clock;
 	}
 
@@ -74,19 +95,27 @@ public class SeoulSubwayClient extends ProviderClientSupport implements TransitP
 		String normalized = query.strip().toLowerCase(Locale.ROOT);
 		return LINES.stream().filter(line -> displayName(line).toLowerCase(Locale.ROOT).contains(normalized))
 				.limit(limit).map(line -> ExternalTransitLine.builder().providerLineId(line).publicName(displayName(line))
-						.operatorName("서울교통공사/TOPIS").routeType("SUBWAY").sourceUpdatedAt(clock.instant()).build())
+						.operatorName(KRIC_OPERATORS.getOrDefault(line, "서울교통공사/TOPIS"))
+						.routeType(KRIC_SCHEDULE_ONLY_LINES.contains(line) ? "SUBWAY_TIMETABLE" : "SUBWAY")
+						.sourceUpdatedAt(clock.instant()).build())
 				.toList();
 	}
 
 	@Override
-	@Cacheable(cacheNames = TransitCacheNames.TRANSIT_STATIC_DATA, key = "'SEOUL:route:v5:' + #providerLineId")
+	@Cacheable(cacheNames = TransitCacheNames.TRANSIT_STATIC_DATA, key = "'SEOUL:route:v6:' + #providerLineId")
 	public ExternalRouteReference fetchRoute(String providerLineId) {
+		if (KRIC_SCHEDULE_ONLY_LINES.contains(providerLineId)) {
+			return route(providerLineId, kricDirections(providerLineId));
+		}
 		List<JsonNode> rows = referenceClient.findAllLineStations().stream()
 				.filter(row -> providerLineId.equals(text(row, "LINE_NUM")))
 				.sorted(Comparator.comparing(
 						row -> fallback(text(row, "FR_CODE"), text(row, "STATION_CD")),
 						Comparator.nullsLast(Comparator.naturalOrder())))
 				.toList();
+		if (rows.isEmpty() && KRIC_STATIC_LINES.contains(providerLineId)) {
+			return route(providerLineId, kricDirections(providerLineId));
+		}
 		Map<String, JsonNode> coordinatesByStationId = new HashMap<>();
 		Map<String, JsonNode> coordinatesByStationName = new HashMap<>();
 		for (JsonNode coordinate : referenceClient.findAllMasterStations()) {
@@ -118,6 +147,66 @@ public class SeoulSubwayClient extends ProviderClientSupport implements TransitP
 		return route(providerLineId, List.of(
 						ExternalDirection.builder().providerDirectionId("UP").displayName("상행/내선").stops(up).build(),
 						ExternalDirection.builder().providerDirectionId("DOWN").displayName("하행/외선").stops(down).build()));
+	}
+
+	private List<ExternalDirection> kricDirections(String providerLineId) {
+		return kricDirections(enrichKricStations(providerLineId));
+	}
+
+	private List<KricStation> enrichKricStations(String providerLineId) {
+		List<KricStation> source = kricStationMaster.findByLineCode(KRIC_LINE_CODES.get(providerLineId));
+		if (source.isEmpty() || !kricTimetableClient.isConfigured()) return source;
+		Map<String, KricStation> remoteByKey = new HashMap<>();
+		source.stream()
+				.map(station -> station.getOperatorCode() + ":" + station.getLineCode())
+				.distinct()
+				.forEach(scope -> {
+					String[] values = scope.split(":", 2);
+					try {
+						for (KricStation station : kricTimetableClient.findLineStations(values[0], values[1])) {
+							remoteByKey.put(values[0] + ":" + values[1] + ":" + station.getStationCode(), station);
+						}
+					} catch (BusinessException ignored) {
+						// Keep the bundled code snapshot when KRIC coordinates are unavailable.
+					}
+				});
+		return source.stream()
+				.map(station -> remoteByKey.getOrDefault(
+						station.getOperatorCode() + ":" + station.getLineCode() + ":" + station.getStationCode(),
+						station))
+				.toList();
+	}
+
+	static List<ExternalDirection> kricDirections(List<KricStation> stations) {
+		if (stations.isEmpty()) return List.of();
+		List<ExternalStop> forward = toKricStops(stations);
+		List<ExternalStop> reverse = new ArrayList<>(forward);
+		java.util.Collections.reverse(reverse);
+		return List.of(
+				ExternalDirection.builder().providerDirectionId("DOWN")
+						.displayName(stations.getLast().getStationName() + " 방면").stops(forward).build(),
+				ExternalDirection.builder().providerDirectionId("UP")
+						.displayName(stations.getFirst().getStationName() + " 방면").stops(reverse).build());
+	}
+
+	private static List<ExternalStop> toKricStops(List<KricStation> stations) {
+		List<ExternalStop> stops = new ArrayList<>();
+		for (int index = 0; index < stations.size(); index++) {
+			KricStation station = stations.get(index);
+			stops.add(ExternalStop.builder()
+					.providerStopId(kricProviderStopId(station))
+					.publicName(station.getStationName())
+					.latitude(station.getLatitude())
+					.longitude(station.getLongitude())
+					.sequence(index + 1)
+					.platformId(station.getStationCode())
+					.build());
+		}
+		return stops;
+	}
+
+	private static String kricProviderStopId(KricStation station) {
+		return station.getOperatorCode() + ":" + station.getLineCode() + ":" + station.getStationCode();
 	}
 
 	private ExternalRouteReference route(String providerLineId, List<ExternalDirection> directions) {
@@ -399,9 +488,11 @@ public class SeoulSubwayClient extends ProviderClientSupport implements TransitP
 	@Override
 	@Cacheable(cacheNames = TransitCacheNames.SEOUL_SUBWAY_ARRIVALS, key = "#providerLineId + ':' + #providerStopId")
 	public List<ExternalArrival> fetchArrivals(String providerLineId, String providerStopId) {
+		if (KRIC_SCHEDULE_ONLY_LINES.contains(providerLineId)) return List.of();
 		List<JsonNode> lineStations = referenceClient.findAllLineStations().stream()
 				.filter(row -> providerLineId.equals(text(row, "LINE_NUM")))
 				.toList();
+		if (lineStations.isEmpty() && KRIC_STATIC_LINES.contains(providerLineId)) return List.of();
 		JsonNode station = lineStations.stream()
 				.filter(row -> providerStopId.equals(text(row, "STATION_CD")))
 				.findFirst().orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Subway station " + providerStopId));

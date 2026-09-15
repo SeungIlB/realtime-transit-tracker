@@ -542,6 +542,7 @@ export function TransitJourneyPage() {
         : `${selectedLine.publicName} · 정류장 정보를 확인하고 있어요.`
   const currentStep = !location ? 1 : !selectedLine ? 2 : !boardingStop ? 3 : 4
   const selectedBoardingAccess = boardingAccess(location, boardingStop)
+  const boardingCoordinatesMissing = Boolean(boardingStop && (boardingStop.latitude === null || boardingStop.longitude === null))
   const mobilePageLabels = ['안내', '위치', '노선', '구간', '결과']
   const maxMobilePage = journeyState !== 'idle' || journeyId || decisionQuery.data
     ? 4
@@ -944,7 +945,7 @@ export function TransitJourneyPage() {
             <TextField variant="box" label={providerOption.searchLabel} labelOption="sustain" id="line-query" name="lineQuery" value={queryInput} onChange={(event) => setQueryInput(event.target.value)} placeholder={providerOption.placeholder} autoComplete="off" />
             <Button type="submit" display="full" size="large" loading={lineQuery.isFetching} disabled={provider === 'NATIONAL_PRECISION_BUS' && !location}>노선 찾기</Button>
           </form>
-          {provider === 'SEOUL_SUBWAY' ? <p className="provider-note">김포골드라인은 공개된 실시간 데이터 API가 없어 실시간 조회를 지원하지 않아요.</p> : null}
+          {provider === 'SEOUL_SUBWAY' ? <p className="provider-note">인천1·2호선과 김포골드라인은 실시간 차량 API가 없어 역사 정보만 제공돼요.</p> : null}
           {provider === 'NATIONAL_PRECISION_BUS' && !location ? <QueryState message="전국 버스는 출발 위치 주변 지역의 노선을 검색해요. 먼저 위치를 선택해 주세요." /> : null}
           {lineQuery.isPending && submittedQuery ? <QueryState message="노선을 찾고 있어요." /> : null}
           {lineQuery.isError ? <QueryState message={lineErrorMessage(provider, lineQuery.error)} action="다시 시도" onAction={() => lineQuery.refetch()} /> : null}
@@ -981,8 +982,8 @@ export function TransitJourneyPage() {
         </section>
 
         <section className="mobile-calculate-panel" aria-label="탑승 가능성 계산">
-          <div><strong>{boardingStop ? `${boardingStop.stopName}${alightingStop ? ` → ${alightingStop.stopName}` : ''}` : '승차 구간을 선택해 주세요'}</strong><p>선택한 위치와 접근 차량을 비교해요.</p></div>
-          <Button type="button" display="full" size="xlarge" onClick={startJourney} disabled={!location || !boardingStop} loading={journeyState === 'starting'}>{journeyId ? '다시 계산하기' : '탑승 가능성 계산'}</Button>
+          <div><strong>{boardingStop ? `${boardingStop.stopName}${alightingStop ? ` → ${alightingStop.stopName}` : ''}` : '승차 구간을 선택해 주세요'}</strong><p>{boardingCoordinatesMissing ? '역 위치 정보가 없어 탑승 가능성을 계산할 수 없어요.' : '선택한 위치와 접근 차량을 비교해요.'}</p></div>
+          <Button type="button" display="full" size="xlarge" onClick={startJourney} disabled={!location || !boardingStop || boardingCoordinatesMissing} loading={journeyState === 'starting'}>{journeyId ? '다시 계산하기' : '탑승 가능성 계산'}</Button>
         </section>
 
         <MobilePageActions previousLabel="노선" onPrevious={() => goToMobilePage(2)} />
