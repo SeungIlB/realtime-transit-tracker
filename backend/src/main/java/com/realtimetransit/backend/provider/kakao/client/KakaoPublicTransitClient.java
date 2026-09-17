@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 
 @Component
 public class KakaoPublicTransitClient {
@@ -23,7 +24,10 @@ public class KakaoPublicTransitClient {
 			@Value("${transit.routing.kakao.base-url:https://dapi.kakao.com}") String baseUrl,
 			@Value("${transit.routing.kakao.rest-api-key:}") String restApiKey,
 			ExternalApiQuotaService quotaService) {
-		this.client = builder.baseUrl(baseUrl).build();
+		SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+		requestFactory.setConnectTimeout(5_000);
+		requestFactory.setReadTimeout(20_000);
+		this.client = builder.requestFactory(requestFactory).baseUrl(baseUrl).build();
 		this.restApiKey = restApiKey;
 		this.quotaService = quotaService;
 	}
